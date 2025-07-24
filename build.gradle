@@ -1,6 +1,6 @@
 plugins {
   id 'java'
-  id 'eclipse'
+  //id 'eclipse'
 
   // Generate coverage during tests.
   id 'jacoco'
@@ -12,24 +12,24 @@ plugins {
   id 'com.github.sherter.google-java-format' version '0.8'
 
   // enforces java style
-  id 'net.ltgt.errorprone' version '0.6'
+  id 'net.ltgt.errorprone' version '4.3.0'
 
   // improve the test output
   id "com.adarshr.test-logger" version "1.7.0"
 }
 
-eclipse {
+/*eclipse {
     classpath {
        downloadSources=true
     }
-}
+}*/
 
 def createScript(project, mainClass, name) {
   project.tasks.create(name: name, type: CreateStartScripts) {
     outputDir       = new File(project.buildDir, 'scripts')
     mainClassName   = mainClass
     applicationName = name
-    classpath       = project.tasks[JavaPlugin.JAR_TASK_NAME].outputs.files + project.configurations.runtime
+    classpath       = project.tasks[JavaPlugin.JAR_TASK_NAME].outputs.files + project.configurations.runtimeClasspath
   }
   project.tasks[name].dependsOn(project.jar)
 
@@ -37,6 +37,7 @@ def createScript(project, mainClass, name) {
     into("bin") {
       from(project.tasks[name])
       fileMode = 0755
+      duplicatesStrategy = 'include'
     }
   }
 }
@@ -63,26 +64,26 @@ dependencies {
   // Also make sure this matches internal Google usage, as closure-compiler is not always
   // dilligent about using the correct versions.
   // https://github.com/google/closure-compiler/blob/master/pom-main.xml
-  compile('args4j:args4j:2.0.26') {
+  implementation('args4j:args4j:2.0.26') {
     // Forced, as Closure Compiler depends on the wrong version.
     force = true
   }
   // In the past we tested against nightly closure releases at  'com.google.javascript:closure-compiler:1.0-SNAPSHOT',
   // but sonatype started 404-ing CircleCI. Now, we test against the latest released Closure version on Circle, and
   // internally test against Closure head.
-  compile 'com.google.javascript:closure-compiler:v20190929'
+  implementation 'com.google.javascript:closure-compiler:v20190929'
 
-  compile 'com.google.code.gson:gson:2.7'
-  compile 'com.google.code.findbugs:jsr305:3.0.1'
-  compile 'com.google.guava:guava:28.0-jre'
-  compile 'org.apache.commons:commons-text:1.4'
+  implementation 'com.google.code.gson:gson:2.7'
+  implementation 'com.google.code.findbugs:jsr305:3.0.1'
+  implementation 'com.google.guava:guava:28.0-jre'
+  implementation 'org.apache.commons:commons-text:1.4'
 
   // ErrorProne itself, plus its javac integration.
-  errorprone("com.google.errorprone:error_prone_core:2.3.2")
+  errorprone("com.google.errorprone:error_prone_core:2.40.0")
   errorproneJavac('com.google.errorprone:javac:9+181-r4173-1')
 
-  testCompile 'junit:junit:4.11'
-  testCompile 'com.google.truth:truth:1.0'
+  testImplementation 'junit:junit:4.11'
+  testImplementation 'com.google.truth:truth:1.0'
 }
 
 tasks.withType(Test) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-
+export NVM_DIR=~/.nvm
 ##############################################################################
 ##
 ##  Gradle start up script for UN*X
