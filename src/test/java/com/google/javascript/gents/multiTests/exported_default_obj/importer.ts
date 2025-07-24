@@ -1,3 +1,3 @@
-import {C} from './exporter';
-import {I} from './exporter';
+import {C, I} from './exporter';
+
 let c = new C();

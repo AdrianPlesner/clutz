@@ -5,14 +5,7 @@ import * as FExports from './export';
 import * as EExports from './export';
 import * as DExports from './export';
 import * as C from './export';
-import {B} from './export';
-import {D} from './export';
-import {E} from './export';
-import {F} from './export';
-import {Z as stuff} from './export';
-/** My comment */
-import {W} from './export';
-import {V} from './export';
+import {B, D, E, F, V, W, Z as stuff} from './export';
 
 B();
 let num = C.x + C.y;
