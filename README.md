@@ -90,7 +90,7 @@ renaming of the imported symbols.
 
 ```shell
 $ gents --convert path/to/my/source1.js path/to/my/source2.js ...
--o typescript/directory
+        -o typescript/directory
 ```
 
 
