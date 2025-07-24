@@ -88,6 +88,12 @@ TypeScript export statements. On the importing side, it converts `goog.require`
 statements into TypeScript imports. Due to naming issues, this may result in the
 renaming of the imported symbols.
 
+```shell
+$ gents --convert path/to/my/source1.js path/to/my/source2.js ...
+-o typescript/directory
+```
+
+
 ```javascript {.good}
 // file a.js
 goog.module('mod.A');
