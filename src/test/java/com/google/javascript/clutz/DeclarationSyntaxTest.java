@@ -47,7 +47,7 @@ public class DeclarationSyntaxTest {
           "--skipDefaultLibCheck",
           "--downlevelIteration",
           "--lib",
-          "es5,dom,es2015.iterable",
+          "es5,dom,es2015.iterable,esnext.asynciterable",
           "--noImplicitAny",
           "--strictNullChecks");
 
