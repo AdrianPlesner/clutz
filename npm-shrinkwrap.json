@@ -10,8 +10,16 @@
       "license": "MIT",
       "devDependencies": {
         "clang-format": "^1.8.0",
-        "typescript": "^5.8.3"
+        "typescript": "^5.8.3",
+        "@typescript/lib-dom": "npm:@types/web@^0.0.254"
       }
+    },
+    "node_modules/@typescript/lib-dom": {
+      "name": "@types/web",
+      "version": "0.0.254",
+      "resolved": "https://registry.npmjs.org/@types/web/-/web-0.0.254.tgz",
+      "integrity": "sha512-7ud8YBtWaKwC8EqnpFHd46eqQ+teV8NVRu4sE+ZkobT9eeRjhgY6ataIycqqaOWKEN0uwb0fLq1DhzjN+iTmoQ==",
+      "license": "Apache-2.0"
     },
     "node_modules/async": {
       "version": "3.2.6",

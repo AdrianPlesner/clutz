@@ -1,7 +1,5 @@
 import * as ImportedClassExports from './export';
-import {aFunction} from './export';
-import {ImportedClass} from './export';
-import {ProvidedSubclass} from './export';
+import {aFunction, ImportedClass, ProvidedSubclass} from './export';
 
 let instanceOfAlias = new ImportedClass();
 let instanceofProvidedAlias = new ImportedClass.ProvidedSubclass();
