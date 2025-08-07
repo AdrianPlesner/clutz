@@ -4,5 +4,5 @@
 declare namespace goog {
   function bind (val1, val2);
 }
-declare var Promise;
+declare var Promise: PromiseConstructor;
 
