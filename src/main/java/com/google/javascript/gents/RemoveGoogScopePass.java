@@ -47,17 +47,19 @@ public final class RemoveGoogScopePass extends AbstractTopLevelCallback implemen
       return;
     }
 
-    switch (callName) {
-      case "goog.provide":
-      case "goog.require":
-        // Register the goog.provide/require namespaces, so that we can remove any aliases.
-        providedNamespaces.add(maybeCallNode.getLastChild().getString());
-        return;
-      case "goog.scope":
-        rewriteGoogScope(n);
-        return;
-      default:
-    }
+      switch (callName) {
+          case "goog.provide", "goog.require" -> {
+              // Register the goog.provide/require namespaces, so that we can remove any aliases.
+              providedNamespaces.add(maybeCallNode.getLastChild().getString());
+              return;
+          }
+          case "goog.scope" -> {
+              rewriteGoogScope(n);
+              return;
+          }
+          default -> {
+          }
+      }
   }
 
   private void rewriteGoogScope(Node n) {
@@ -105,15 +107,18 @@ public final class RemoveGoogScopePass extends AbstractTopLevelCallback implemen
    * @return RewriteStatus (see class comment).
    */
   private RewriteStatus maybeRewriteAlias(Node node) {
-    switch (node.getFirstChild().getToken()) {
-      case NAME:
-        return maybeRecordAndRemoveAlias(node.getFirstChild());
-      case ASSIGN:
-        maybeReassignAlias(node.getFirstChild());
-        return stillAttached;
-      default:
-        return stillAttached;
-    }
+      switch (node.getFirstChild().getToken()) {
+          case NAME -> {
+              return maybeRecordAndRemoveAlias(node.getFirstChild());
+          }
+          case ASSIGN -> {
+              maybeReassignAlias(node.getFirstChild());
+              return stillAttached;
+          }
+          default -> {
+              return stillAttached;
+          }
+      }
   }
 
   /** Sentinel value used to express that the node is still attached. */

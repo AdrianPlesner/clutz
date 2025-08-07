@@ -13,6 +13,7 @@ import java.io.PrintStream;
  *
  * <p>This error manager is a simplified version of the {@code ClutzErrorManager} from Clutz.
  */
+@SuppressWarnings("deprecation")
 final class GentsErrorManager extends PrintStreamErrorManager {
 
   private final boolean debug;

@@ -98,131 +98,125 @@ public final class TypeAnnotationPass implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       JSDocInfo bestJSDocInfo = NodeUtil.getBestJSDocInfo(n);
-      switch (n.getToken()) {
-          // Fields default to any type
-        case MEMBER_VARIABLE_DEF:
-          if (bestJSDocInfo != null && bestJSDocInfo.getType() != null) {
-            setTypeExpression(n, bestJSDocInfo.getType(), false);
-          } else {
-            n.setDeclaredTypeExpression(anyType());
-          }
-          break;
-          // Functions are annotated with their return type
-        case FUNCTION:
-          if (bestJSDocInfo != null) {
-            setTypeExpression(n, bestJSDocInfo.getReturnType(), true);
-          }
-          break;
-        case CLASS:
-          if (bestJSDocInfo != null) {
-            List<JSTypeExpression> interfaces = bestJSDocInfo.getImplementedInterfaces();
-            if (!interfaces.isEmpty()) {
-              // Convert the @implements {...} JSDoc comments to TypeNodeASTs, and add them into the
-              // implements part of the class definition.
-              Node impls = new Node(Token.IMPLEMENTS);
-              for (JSTypeExpression type : interfaces) {
-                impls.addChildToBack(convertTypeNodeAST(type.getRoot()));
-              }
-              impls.useSourceInfoFrom(n);
-              n.putProp(Node.IMPLEMENTS, impls);
+        switch (n.getToken()) {
+            // Fields default to any type
+            case MEMBER_VARIABLE_DEF -> {
+                if (bestJSDocInfo != null && bestJSDocInfo.getType() != null) {
+                    setTypeExpression(n, bestJSDocInfo.getType(), false);
+                } else {
+                    n.setDeclaredTypeExpression(anyType());
+                }
             }
-          }
-          break;
-        case INTERFACE_EXTENDS:
-          Node newExtends = n.cloneNode();
-          for (Node c : n.children()) {
-            newExtends.addChildToBack(convertTypeNodeAST(c));
-          }
-          parent.replaceChild(n, newExtends);
-          break;
-        case TYPE_ALIAS:
-          if (bestJSDocInfo != null && bestJSDocInfo.hasTypedefType()) {
-            JSTypeExpression typeDef = bestJSDocInfo.getTypedefType();
-            n.addChildToBack(convertTypeNodeAST(typeDef.getRoot()));
-          }
-          break;
-          // Names and properties are annotated with their types
-        case NAME:
-        case GETPROP:
-          if (parent == null) {
-            break;
-          }
-          if (NodeUtil.isNameDeclaration(parent)) { // Variable declaration
-            maybeSetInlineTypeExpression(n, n, bestJSDocInfo, false);
-          } else if (parent.isParamList()) { // Function parameters
-            boolean wasSetFromFunctionDoc = setParameterTypeFromFunctionDoc(n, parent);
-            if (!wasSetFromFunctionDoc) {
-              // If we didn't set the parameter type from the functions's JsDoc, then maybe the type
-              // is inlined just before the parameter?
-              maybeSetInlineTypeExpression(n, n, bestJSDocInfo, false);
+            // Functions are annotated with their return type
+            case FUNCTION -> {
+                if (bestJSDocInfo != null) {
+                    setTypeExpression(n, bestJSDocInfo.getReturnType(), true);
+                }
             }
-          } else if (parent.isFunction() && n.getJSDocInfo() == bestJSDocInfo) {
-            // If this is a name of the function and the JsDoc is just before this name,
-            // then it may be an inline return type of this function.
-            maybeSetInlineTypeExpression(parent, n, bestJSDocInfo, true);
-          }
-          break;
-          // If a DEVAULE_VALUE is in a PARAM_LIST we type annotate its first child which is the
-          // actual parameter.
-        case DEFAULT_VALUE:
-          Node paramNode = n.getFirstChild();
-          if (parent != null && parent.isParamList() && paramNode != null && paramNode.isName()) {
-            boolean wasSetFromFunctionDoc = setParameterTypeFromFunctionDoc(paramNode, parent);
-            if (!wasSetFromFunctionDoc) {
-              // If we didn't set the parameter type from the functions's JsDoc, then maybe the type
-              // is inlined just before the parameter?
-              maybeSetInlineTypeExpression(paramNode, paramNode, bestJSDocInfo, false);
+            case CLASS -> {
+                if (bestJSDocInfo != null) {
+                    List<JSTypeExpression> interfaces = bestJSDocInfo.getImplementedInterfaces();
+                    if (!interfaces.isEmpty()) {
+                        // Convert the @implements {...} JSDoc comments to TypeNodeASTs, and add them into the
+                        // implements part of the class definition.
+                        Node impls = new Node(Token.IMPLEMENTS);
+                        for (JSTypeExpression type : interfaces) {
+                            impls.addChildToBack(convertTypeNodeAST(type.getRoot()));
+                        }
+                        impls.useSourceInfoFrom(n);
+                        n.putProp(Node.IMPLEMENTS, impls);
+                    }
+                }
             }
-          }
-          break;
-        case CAST:
-          setTypeExpression(n, n.getJSDocInfo().getType(), false);
-          break;
-        case INTERFACE_MEMBERS:
-          // Closure code generator expects the form:
-          //
-          // INTERFACE_MEMBERS
-          //     MEMBER_VARIABLE_DEF property1 [jsdoc_info: JSDocInfo]
-          //     MEMBER_VARIABLE_DEF property2 [jsdoc_info: JSDocInfo]
-          //
-          // Each MEMBER_VARIABLE_DEF has a jsdoc about its typing.
-          //
-          // Closure annotated interfaces are already in this format at this point so it's a no-op
-          // here. typedefs inside classes are converted to top level interfaces in
-          // TypeConversionPass. They are in a different format:
-          //
-          // INTERFACE_MEMBERS [jsdoc_info: JSDocInfo]
-          //
-          // There are no MEMBER_VARIABLE_DEFs yet. All the information are stored in
-          // INTERFACE_MEMBERS's jsdoc. We are extracting the properties from the jsdoc and
-          // creating each MEMBER_VARIABLE_DEFs so code generator works.
-          if (bestJSDocInfo != null && bestJSDocInfo.hasTypedefType()) {
-            Node typedefTypeRoot = bestJSDocInfo.getTypedefType().getRoot();
-            if ((typedefTypeRoot.getToken() == Token.BANG)
-                || (typedefTypeRoot.getToken() == Token.QMARK)) {
-              typedefTypeRoot = typedefTypeRoot.getFirstChild();
+            case INTERFACE_EXTENDS -> {
+                Node newExtends = n.cloneNode();
+                for (Node c : n.children()) {
+                    newExtends.addChildToBack(convertTypeNodeAST(c));
+                }
+                parent.replaceChild(n, newExtends);
             }
-            // (BANG|QMARK)
-            //     LC
-            //         LB
-            //             COLON
-            //                 STRING_KEY a
-            //                 STRING number
-            //             COLON
-            //                 STRING_KEY b
-            //                 STRING number
-            for (Node colonNode : typedefTypeRoot.getFirstChild().children()) {
-              Node memberVariableDefNode =
-                  Node.newString(Token.MEMBER_VARIABLE_DEF, colonNode.getFirstChild().getString());
-              memberVariableDefNode.setDeclaredTypeExpression(
-                  convertTypeNodeAST(colonNode.getSecondChild()));
-              n.addChildToBack(memberVariableDefNode);
+            case TYPE_ALIAS -> {
+                if (bestJSDocInfo != null && bestJSDocInfo.hasTypedefType()) {
+                    JSTypeExpression typeDef = bestJSDocInfo.getTypedefType();
+                    n.addChildToBack(convertTypeNodeAST(typeDef.getRoot()));
+                }
             }
-          }
-          break;
-        default:
-          break;
-      }
+            // Names and properties are annotated with their types
+            case NAME, GETPROP -> {
+                if (parent == null) {
+                    break;
+                }
+                if (NodeUtil.isNameDeclaration(parent)) { // Variable declaration
+                    maybeSetInlineTypeExpression(n, n, bestJSDocInfo, false);
+                } else if (parent.isParamList()) { // Function parameters
+                    boolean wasSetFromFunctionDoc = setParameterTypeFromFunctionDoc(n, parent);
+                    if (!wasSetFromFunctionDoc) {
+                        // If we didn't set the parameter type from the functions's JsDoc, then maybe the type
+                        // is inlined just before the parameter?
+                        maybeSetInlineTypeExpression(n, n, bestJSDocInfo, false);
+                    }
+                } else if (parent.isFunction() && n.getJSDocInfo() == bestJSDocInfo) {
+                    // If this is a name of the function and the JsDoc is just before this name,
+                    // then it may be an inline return type of this function.
+                    maybeSetInlineTypeExpression(parent, n, bestJSDocInfo, true);
+                }
+            }
+            // If a DEVAULE_VALUE is in a PARAM_LIST we type annotate its first child which is the
+            // actual parameter.
+            case DEFAULT_VALUE -> {
+                Node paramNode = n.getFirstChild();
+                if (parent != null && parent.isParamList() && paramNode != null && paramNode.isName()) {
+                    boolean wasSetFromFunctionDoc = setParameterTypeFromFunctionDoc(paramNode, parent);
+                    if (!wasSetFromFunctionDoc) {
+                        // If we didn't set the parameter type from the functions's JsDoc, then maybe the type
+                        // is inlined just before the parameter?
+                        maybeSetInlineTypeExpression(paramNode, paramNode, bestJSDocInfo, false);
+                    }
+                }
+            }
+            case CAST -> setTypeExpression(n, n.getJSDocInfo().getType(), false);
+            case INTERFACE_MEMBERS -> {
+                // Closure code generator expects the form:
+                //
+                // INTERFACE_MEMBERS
+                //     MEMBER_VARIABLE_DEF property1 [jsdoc_info: JSDocInfo]
+                //     MEMBER_VARIABLE_DEF property2 [jsdoc_info: JSDocInfo]
+                //
+                // Each MEMBER_VARIABLE_DEF has a jsdoc about its typing.
+                //
+                // Closure annotated interfaces are already in this format at this point so it's a no-op
+                // here. typedefs inside classes are converted to top level interfaces in
+                // TypeConversionPass. They are in a different format:
+                //
+                // INTERFACE_MEMBERS [jsdoc_info: JSDocInfo]
+                //
+                // There are no MEMBER_VARIABLE_DEFs yet. All the information are stored in
+                // INTERFACE_MEMBERS's jsdoc. We are extracting the properties from the jsdoc and
+                // creating each MEMBER_VARIABLE_DEFs so code generator works.
+                if (bestJSDocInfo != null && bestJSDocInfo.hasTypedefType()) {
+                    Node typedefTypeRoot = bestJSDocInfo.getTypedefType().getRoot();
+                    if ((typedefTypeRoot.getToken() == Token.BANG) || (typedefTypeRoot.getToken() == Token.QMARK)) {
+                        typedefTypeRoot = typedefTypeRoot.getFirstChild();
+                    }
+                    // (BANG|QMARK)
+                    //     LC
+                    //         LB
+                    //             COLON
+                    //                 STRING_KEY a
+                    //                 STRING number
+                    //             COLON
+                    //                 STRING_KEY b
+                    //                 STRING number
+                    for (Node colonNode : typedefTypeRoot.getFirstChild().children()) {
+                        Node memberVariableDefNode = Node.newString(Token.MEMBER_VARIABLE_DEF, colonNode.getFirstChild().getString());
+                        memberVariableDefNode.setDeclaredTypeExpression(convertTypeNodeAST(colonNode.getSecondChild()));
+                        n.addChildToBack(memberVariableDefNode);
+                    }
+                }
+            }
+            default -> {
+            }
+        }
     }
 
     private void maybeSetInlineTypeExpression(
@@ -366,160 +360,163 @@ public final class TypeAnnotationPass implements CompilerPass {
 
   @Nullable
   private TypeDeclarationNode convertTypeNodeAST(Node n, boolean isReturnType) {
-    switch (n.getToken()) {
-        // for function types that don't declare a return type
-        // ex. /** @return */ var f = function() {};
-      case EMPTY:
-        return null;
-        // TODO(renez): re-evaluate whether or not we want to convert {*} to the any type.
-      case STAR:
-        return anyType();
-      case VOID:
-        return isReturnType ? voidType() : undefinedType();
-        // TypeScript types are non-nullable by default with --strictNullChecks
-      case BANG:
-        return convertTypeNodeAST(n.getFirstChild());
-      case QMARK:
-        Node child = n.getFirstChild();
-        if (child == null) {
-          return anyType();
-        } else {
-          ImmutableList<TypeDeclarationNode> types =
-              ImmutableList.of(convertTypeNodeAST(child), new TypeDeclarationNode(Token.NULL));
-          return flatUnionType(types);
-        }
-      case STRING:
-        String typeName = n.getString();
-        switch (typeName) {
-          case "boolean":
-            return booleanType();
-          case "number":
-            return numberType();
-          case "string":
-            return stringType();
-          case "null":
-            // TODO(renez): refactor this once Token.NULL_TYPE exists
-            return new TypeDeclarationNode(Token.NULL);
-            // Both undefined and void are converted to undefined for all non-return types.
-            // In closure, "void" and "undefined" are type aliases and thus, equivalent types.
-            // However, in TS, it is more ideomatic to emit "void" for return types.
-            // Additionally, there is semantic difference to note: TS "undefined" return types require
-            // a return statement, while "void" does not.
-          case "undefined":
-          case "void":
-            return isReturnType ? voidType() : undefinedType();
-          default:
-            String newTypeName = convertTypeName(n.getSourceFileName(), typeName);
-            newTypeName = convertExternNameToTypingName(newTypeName);
-            TypeDeclarationNode root = namedType(newTypeName);
-            if (n.getChildCount() > 0 && n.getFirstChild().isNormalBlock()) {
-              Node block = n.getFirstChild();
-              // Convert {Array<t>} to t[]
-              if ("Array".equals(typeName)) {
-                return arrayType(convertTypeNodeAST(block.getFirstChild()));
-              }
-
-              // Convert index signature types
-              if ("Object".equals(typeName)) {
-                TypeDeclarationNode indexSignatureNode =
-                    indexSignatureType(
-                        convertTypeNodeAST(block.getFirstChild()),
-                        convertTypeNodeAST(block.getSecondChild()));
-                return indexSignatureNode;
-              }
-
-              // Convert generic types
-              return parameterizedType(
-                  root,
-                  Iterables.filter(
-                      Iterables.transform(block.children(), this::convertTypeNodeAST),
-                      Predicates.notNull()));
-            }
-            return root;
-        }
-        // Convert records
-      case LC:
-        LinkedHashMap<String, TypeDeclarationNode> properties = new LinkedHashMap<>();
-        for (Node field : n.getFirstChild().children()) {
-          boolean isFieldTypeDeclared = field.getToken() == Token.COLON;
-          Node fieldNameNode = isFieldTypeDeclared ? field.getFirstChild() : field;
-          String fieldName = fieldNameNode.getString();
-          if (fieldName.startsWith("'") || fieldName.startsWith("\"")) {
-            fieldName = fieldName.substring(1, fieldName.length() - 1);
+      switch (n.getToken()) {
+          // for function types that don't declare a return type
+          // ex. /** @return */ var f = function() {};
+          case EMPTY -> {
+              return null;
           }
-          TypeDeclarationNode fieldType =
-              isFieldTypeDeclared ? convertTypeNodeAST(field.getLastChild()) : null;
-          properties.put(fieldName, fieldType);
-        }
-        return recordType(properties);
-        // Convert unions
-      case PIPE:
-        ImmutableList<TypeDeclarationNode> types =
-            FluentIterable.from(n.children())
-                .transform(this::convertTypeNodeAST)
-                .filter(Predicates.notNull())
-                .toList();
-        switch (types.size()) {
-          case 0:
-            return null;
-          case 1:
-            return types.get(0);
-          default:
-            return flatUnionType(types);
-        }
-        // Convert function types
-      case FUNCTION:
-        Node returnType = anyType();
-        LinkedHashMap<String, TypeDeclarationNode> requiredParams = new LinkedHashMap<>();
-        LinkedHashMap<String, TypeDeclarationNode> optionalParams = new LinkedHashMap<>();
-        String restName = null;
-        TypeDeclarationNode restType = null;
-        for (Node child2 : n.children()) {
-          if (child2.isParamList()) {
-            int paramIdx = 1;
-            for (Node param : child2.children()) {
-              String paramName = "p" + paramIdx++;
-              if (param.getToken() == Token.ITER_REST) {
-                if (param.getFirstChild() != null) {
-                  restType = convertTypeNodeAST(param);
-                }
-                restName = paramName;
-              } else if (param.getToken() == Token.EQUALS) {
-                optionalParams.put(paramName, convertTypeNodeAST(param));
+          // TODO(renez): re-evaluate whether or not we want to convert {*} to the any type.
+          case STAR -> {
+              return anyType();
+          }
+          case VOID -> {
+              return isReturnType ? voidType() : undefinedType();
+          }
+          // TypeScript types are non-nullable by default with --strictNullChecks
+          case BANG -> {
+              return convertTypeNodeAST(n.getFirstChild());
+          }
+          case QMARK -> {
+              Node child = n.getFirstChild();
+              if (child == null) {
+                  return anyType();
               } else {
-                requiredParams.put(paramName, convertTypeNodeAST(param));
+                  ImmutableList<TypeDeclarationNode> types = ImmutableList.of(convertTypeNodeAST(child), new TypeDeclarationNode(Token.NULL));
+                  return flatUnionType(types);
               }
-            }
-          } else if (child2.isNew()) {
-            // keep the constructor signatures on the tree, and emit them following
-            // the syntax in TypeScript 1.8 spec, section 3.8.9 Constructor Type Literals
-          } else if (child2.isThis()) {
-            // Not expressible in TypeScript syntax, so we omit them from the tree.
-            // They could be added as properties on the result node.
-          } else {
-            returnType = convertTypeNodeAST(child2, true);
-            if (returnType == null) {
-              returnType = anyType();
-            }
           }
-        }
-        return functionType(returnType, requiredParams, optionalParams, restName, restType);
-        // Variable function parameters are encoded as an array.
-      case ITER_REST:
-        Node arrType = convertTypeNodeAST(n.getFirstChild());
-        if (arrType == null) {
-          arrType = anyType();
-        }
-        return arrayType(arrType);
-        // Optional parameters are entirely encoded within the parameter name while the type
-        // remains the same.
-      case EQUALS:
-        return convertTypeNodeAST(n.getFirstChild());
-      case NAME:
-        return namedType(n.getString());
-      default:
-        throw new IllegalArgumentException("Unsupported node type:\n" + n.toStringTree());
-    }
+          case STRING -> {
+              String typeName = n.getString();
+              switch (typeName) {
+                  case "boolean":
+                      return booleanType();
+                  case "number":
+                      return numberType();
+                  case "string":
+                      return stringType();
+                  case "null":
+                      // TODO(renez): refactor this once Token.NULL_TYPE exists
+                      return new TypeDeclarationNode(Token.NULL);
+                  // Both undefined and void are converted to undefined for all non-return types.
+                  // In closure, "void" and "undefined" are type aliases and thus, equivalent types.
+                  // However, in TS, it is more ideomatic to emit "void" for return types.
+                  // Additionally, there is semantic difference to note: TS "undefined" return types require
+                  // a return statement, while "void" does not.
+                  case "undefined":
+                  case "void":
+                      return isReturnType ? voidType() : undefinedType();
+                  default:
+                      String newTypeName = convertTypeName(n.getSourceFileName(), typeName);
+                      newTypeName = convertExternNameToTypingName(newTypeName);
+                      TypeDeclarationNode root = namedType(newTypeName);
+                      if (n.getChildCount() > 0 && n.getFirstChild().isNormalBlock()) {
+                          Node block = n.getFirstChild();
+                          // Convert {Array<t>} to t[]
+                          if ("Array".equals(typeName)) {
+                              return arrayType(convertTypeNodeAST(block.getFirstChild()));
+                          }
+
+                          // Convert index signature types
+                          if ("Object".equals(typeName)) {
+                              TypeDeclarationNode indexSignatureNode = indexSignatureType(convertTypeNodeAST(block.getFirstChild()),
+                                                                                          convertTypeNodeAST(block.getSecondChild()));
+                              return indexSignatureNode;
+                          }
+
+                          // Convert generic types
+                          return parameterizedType(root,
+                                                   Iterables.filter(Iterables.transform(block.children(), this::convertTypeNodeAST), Predicates.notNull()));
+                      }
+                      return root;
+              }
+          }
+          // Convert records
+          case LC -> {
+              LinkedHashMap<String, TypeDeclarationNode> properties = new LinkedHashMap<>();
+              for (Node field : n.getFirstChild().children()) {
+                  boolean isFieldTypeDeclared = field.getToken() == Token.COLON;
+                  Node fieldNameNode = isFieldTypeDeclared ? field.getFirstChild() : field;
+                  String fieldName = fieldNameNode.getString();
+                  if (fieldName.startsWith("'") || fieldName.startsWith("\"")) {
+                      fieldName = fieldName.substring(1, fieldName.length() - 1);
+                  }
+                  TypeDeclarationNode fieldType = isFieldTypeDeclared ? convertTypeNodeAST(field.getLastChild()) : null;
+                  properties.put(fieldName, fieldType);
+              }
+              return recordType(properties);
+          }
+          // Convert unions
+          case PIPE -> {
+              ImmutableList<TypeDeclarationNode> types = FluentIterable.from(n.children())
+                                                                       .transform(this::convertTypeNodeAST)
+                                                                       .filter(Predicates.notNull())
+                                                                       .toList();
+              switch (types.size()) {
+                  case 0:
+                      return null;
+                  case 1:
+                      return types.get(0);
+                  default:
+                      return flatUnionType(types);
+              }
+          }
+          // Convert function types
+          case FUNCTION -> {
+              Node returnType = anyType();
+              LinkedHashMap<String, TypeDeclarationNode> requiredParams = new LinkedHashMap<>();
+              LinkedHashMap<String, TypeDeclarationNode> optionalParams = new LinkedHashMap<>();
+              String restName = null;
+              TypeDeclarationNode restType = null;
+              for (Node child2 : n.children()) {
+                  if (child2.isParamList()) {
+                      int paramIdx = 1;
+                      for (Node param : child2.children()) {
+                          String paramName = "p" + paramIdx++;
+                          if (param.getToken() == Token.ITER_REST) {
+                              if (param.getFirstChild() != null) {
+                                  restType = convertTypeNodeAST(param);
+                              }
+                              restName = paramName;
+                          } else if (param.getToken() == Token.EQUALS) {
+                              optionalParams.put(paramName, convertTypeNodeAST(param));
+                          } else {
+                              requiredParams.put(paramName, convertTypeNodeAST(param));
+                          }
+                      }
+                  } else if (child2.isNew()) {
+                      // keep the constructor signatures on the tree, and emit them following
+                      // the syntax in TypeScript 1.8 spec, section 3.8.9 Constructor Type Literals
+                  } else if (child2.isThis()) {
+                      // Not expressible in TypeScript syntax, so we omit them from the tree.
+                      // They could be added as properties on the result node.
+                  } else {
+                      returnType = convertTypeNodeAST(child2, true);
+                      if (returnType == null) {
+                          returnType = anyType();
+                      }
+                  }
+              }
+              return functionType(returnType, requiredParams, optionalParams, restName, restType);
+          }
+          // Variable function parameters are encoded as an array.
+          case ITER_REST -> {
+              Node arrType = convertTypeNodeAST(n.getFirstChild());
+              if (arrType == null) {
+                  arrType = anyType();
+              }
+              return arrayType(arrType);
+          }
+          // Optional parameters are entirely encoded within the parameter name while the type
+          // remains the same.
+          case EQUALS -> {
+              return convertTypeNodeAST(n.getFirstChild());
+          }
+          case NAME -> {
+              return namedType(n.getString());
+          }
+          default -> throw new IllegalArgumentException("Unsupported node type:\n" + n.toStringTree());
+      }
   }
 
   /** Returns a new node representing an index signature type. */
@@ -603,26 +600,21 @@ public final class TypeAnnotationPass implements CompilerPass {
   private void flatten(
       Iterable<TypeDeclarationNode> types, List<TypeDeclarationNode> result, boolean hasNull) {
     for (TypeDeclarationNode t : types) {
-      switch (t.getToken()) {
-        case NULL:
-          if (!hasNull) {
-            result.add(new TypeDeclarationNode(Token.NULL));
-            hasNull = true;
-          }
-          break;
-        case UNION_TYPE:
-          Iterable<TypeDeclarationNode> children =
-              FluentIterable.from(t.children())
-                  .transform(node -> (TypeDeclarationNode) node)
-                  .toList();
-          // We had to invoke .toList() as detachChildren() breaks the Iterable.
-          t.detachChildren();
-          flatten(children, result, hasNull);
-          break;
-        default:
-          result.add(t);
-          break;
-      }
+        switch (t.getToken()) {
+            case NULL -> {
+                if (!hasNull) {
+                    result.add(new TypeDeclarationNode(Token.NULL));
+                    hasNull = true;
+                }
+            }
+            case UNION_TYPE -> {
+                Iterable<TypeDeclarationNode> children = FluentIterable.from(t.children()).transform(node -> (TypeDeclarationNode) node).toList();
+                // We had to invoke .toList() as detachChildren() breaks the Iterable.
+                t.detachChildren();
+                flatten(children, result, hasNull);
+            }
+            default -> result.add(t);
+        }
     }
   }
 

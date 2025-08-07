@@ -31,6 +31,7 @@ import org.kohsuke.args4j.spi.Parameters;
 import org.kohsuke.args4j.spi.Setter;
 import org.kohsuke.args4j.spi.StopOptionHandler;
 
+@SuppressWarnings({ "UnstableApiUsage", "deprecation" })
 public class Options {
   /**
    * An {@link OptionHandler} the parses an array of strings as an option.

@@ -48,29 +48,29 @@ public class GentsCodeGenerator extends CodeGenerator {
     super.add(n, ctx);
 
     // Default field values
-    switch (n.getToken()) {
-      case MEMBER_VARIABLE_DEF:
-        if (n.hasChildren()) {
-          add(" = ");
-          add(n.getLastChild());
-        }
-        break;
-      case NEW:
-        // The Closure Compiler code generator drops off the extra () for new statements.
-        // We add them back in to maintain a consistent style.
-        if (n.hasOneChild()) {
-          add("()");
-        }
-        break;
-      case FUNCTION_TYPE:
-        // Match the "(" in maybeOverrideCodeGen for FUNCTION_TYPE nodes.
-        if (parent != null && parent.getToken() == Token.UNION_TYPE) {
-          add(")");
-        }
-        break;
-      default:
-        break;
-    }
+      switch (n.getToken()) {
+          case MEMBER_VARIABLE_DEF -> {
+              if (n.hasChildren()) {
+                  add(" = ");
+                  add(n.getLastChild());
+              }
+          }
+          case NEW -> {
+              // The Closure Compiler code generator drops off the extra () for new statements.
+              // We add them back in to maintain a consistent style.
+              if (n.hasOneChild()) {
+                  add("()");
+              }
+          }
+          case FUNCTION_TYPE -> {
+              // Match the "(" in maybeOverrideCodeGen for FUNCTION_TYPE nodes.
+              if (parent != null && parent.getToken() == Token.UNION_TYPE) {
+                  add(")");
+              }
+          }
+          default -> {
+          }
+      }
   }
 
   private static final ImmutableSet<Token> TOKENS_TO_ADD_NEWLINES_BEFORE =
@@ -110,88 +110,95 @@ public class GentsCodeGenerator extends CodeGenerator {
    */
   private boolean maybeOverrideCodeGen(Node n) {
     @Nullable Node parent = n.getParent();
-    switch (n.getToken()) {
-      case INDEX_SIGNATURE:
-        Node first = n.getFirstChild();
-        if (null != first) {
-          add("{[");
-          add(first);
-          add(":");
-          add(first.getDeclaredTypeExpression());
-          add("]:");
-          add(n.getDeclaredTypeExpression());
-          add("}");
-        }
-        return true;
-      case UNDEFINED_TYPE:
-        add("undefined");
-        return true;
-      case CAST:
-        add("(");
-        add(n.getFirstChild());
-        add(" as ");
-        add(n.getDeclaredTypeExpression());
-        add(")");
-        return true;
-      case DEFAULT_VALUE:
-      case NAME:
-        // Prepend access modifiers on constructor params
-        if (n.getParent().isParamList()) {
-          Visibility visibility = (Visibility) n.getProp(Node.ACCESS_MODIFIER);
-          if (visibility != null) {
-            switch (visibility) {
-              case PRIVATE:
-                add("private ");
-                break;
-              case PROTECTED:
-                add("protected ");
-                break;
-              case PUBLIC:
-                add("public ");
-                break;
-              default:
-                break;
-            }
+      switch (n.getToken()) {
+          case INDEX_SIGNATURE -> {
+              Node first = n.getFirstChild();
+              if (null != first) {
+                  add("{[");
+                  add(first);
+                  add(":");
+                  add(first.getDeclaredTypeExpression());
+                  add("]:");
+                  add(n.getDeclaredTypeExpression());
+                  add("}");
+              }
+              return true;
           }
+          case UNDEFINED_TYPE -> {
+              add("undefined");
+              return true;
+          }
+          case CAST -> {
+              add("(");
+              add(n.getFirstChild());
+              add(" as ");
+              add(n.getDeclaredTypeExpression());
+              add(")");
+              return true;
+          }
+          case DEFAULT_VALUE, NAME -> {
+              // Prepend access modifiers on constructor params
+              if (n.getParent().isParamList()) {
+                  Visibility visibility = (Visibility) n.getProp(Node.ACCESS_MODIFIER);
+                  if (visibility != null) {
+                      switch (visibility) {
+                          case PRIVATE:
+                              add("private ");
+                              break;
+                          case PROTECTED:
+                              add("protected ");
+                              break;
+                          case PUBLIC:
+                              add("public ");
+                              break;
+                          default:
+                              break;
+                      }
+                  }
 
-          if (n.getBooleanProp(Node.IS_CONSTANT_NAME)) {
-            add("readonly ");
+                  if (n.getBooleanProp(Node.IS_CONSTANT_NAME)) {
+                      add("readonly ");
+                  }
+              }
+              return false;
           }
-        }
-        return false;
-      case ANY_TYPE:
-        // Check the externsMap for an alias to use in place of "any"
-        String anyTypeName = externsMap.get("any");
-        if (anyTypeName != null) {
-          add(anyTypeName);
-          return true;
-        }
-        return false;
-      case EXPORT:
-        // When a type alias is exported, closure code generator will add two semi-colons, one for
-        // type alias and one for export
-        // For example: export type T = {key: string};;
-        if (!n.hasOneChild()) {
-          return false;
-        }
-        if (n.getFirstChild().getToken() == Token.TYPE_ALIAS) {
-          add("export");
-          add(n.getFirstChild());
-          return true;
-        }
-        return false;
-      case FUNCTION_TYPE:
-        // In some cases we need to add a pair of "(" and ")" around the function type. We don't
-        // want to override the default code generation for FUNCTION_TYPE because the default code
-        // generation uses private APIs. Therefore we emit a "(" here, then let the default code
-        // generation for FUNCTION_TYPE emit and finally emit a ")" after maybeOverrideCodeGen.
-        // Union binding has higher precedence than "=>" in TypeScript.
-        if (parent != null && parent.getToken() == Token.UNION_TYPE) {
-          add("(");
-        }
-        return false;
-      default:
-        return false;
-    }
+          case ANY_TYPE -> {
+              // Check the externsMap for an alias to use in place of "any"
+              String anyTypeName = externsMap.get("any");
+              if (anyTypeName != null) {
+                  add(anyTypeName);
+                  return true;
+              }
+              return false;
+          }
+          case EXPORT -> {
+              // When a type alias is exported, closure code generator will add two semi-colons, one for
+              // type alias and one for export
+              // For example: export type T = {key: string};;
+              if (!n.hasOneChild()) {
+                  return false;
+              }
+              if (n.getFirstChild().getToken() == Token.TYPE_ALIAS) {
+                  add("export");
+                  add(n.getFirstChild());
+                  return true;
+              }
+              return false;
+          }
+          case FUNCTION_TYPE -> {
+              // In some cases we need to add a pair of "(" and ")" around the function type. We don't
+              // want to override the default code generation for FUNCTION_TYPE because the default code
+              // generation uses private APIs. Therefore we emit a "(" here, then let the default code
+              // generation for FUNCTION_TYPE emit and finally emit a ")" after maybeOverrideCodeGen.
+              // Union binding has higher precedence than "=>" in TypeScript.
+              if (parent != null && parent.getToken() == Token.UNION_TYPE) {
+                  add("(");
+              }
+              return false;
+          }
+          default -> {
+              return false;
+          }
+      }
   }
 }

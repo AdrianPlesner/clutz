@@ -135,68 +135,59 @@ public final class ModuleConversionPass implements CompilerPass {
       }
 
       Node child = n.getFirstChild();
-      switch (child.getToken()) {
-        case CALL:
-          String callName = child.getFirstChild().getQualifiedName();
-          if ("goog.module".equals(callName) || "goog.provide".equals(callName)) {
-            // Remove the goog.module and goog.provide calls.
-            if (nodeComments.hasComment(n)) {
-              nodeComments.replaceWithComment(n, new Node(Token.EMPTY));
-            } else {
-              compiler.reportChangeToEnclosingScope(n);
-              n.detach();
+        switch (child.getToken()) {
+            case CALL -> {
+                String callName = child.getFirstChild().getQualifiedName();
+                if ("goog.module".equals(callName) || "goog.provide".equals(callName)) {
+                    // Remove the goog.module and goog.provide calls.
+                    if (nodeComments.hasComment(n)) {
+                        nodeComments.replaceWithComment(n, new Node(Token.EMPTY));
+                    } else {
+                        compiler.reportChangeToEnclosingScope(n);
+                        n.detach();
+                    }
+                }
             }
-          }
-          break;
-        case GETPROP:
-          {
-            JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(child);
-            if (jsdoc == null || !jsdoc.containsTypeDefinition()) {
-              // GETPROPs on the root level are only exports for @typedefs
-              break;
+            case GETPROP -> {
+                JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(child);
+                if (jsdoc == null || !jsdoc.containsTypeDefinition()) {
+                    // GETPROPs on the root level are only exports for @typedefs
+                    break;
+                }
+                if (!fileToModule.containsKey(fileName)) {
+                    break;
+                }
+                FileModule module = fileToModule.get(fileName);
+                Map<String, String> symbols = module.exportedNamespacesToSymbols;
+                String exportedNamespace = nameUtil.findLongestNamePrefix(child, symbols.keySet());
+                if (exportedNamespace != null) {
+                    String localName = symbols.get(exportedNamespace);
+                    Node export = new Node(Token.EXPORT, createExportSpecs(Node.newString(Token.NAME, localName)));
+                    export.useSourceInfoFromForTree(child);
+                    parent.addChildAfter(export, n);
+                    // Registers symbol for rewriting local uses.
+                    registerLocalSymbol(child.getSourceFileName(), exportedNamespace, exportedNamespace, localName);
+                }
             }
-            if (!fileToModule.containsKey(fileName)) {
-              break;
-            }
-            FileModule module = fileToModule.get(fileName);
-            Map<String, String> symbols = module.exportedNamespacesToSymbols;
-            String exportedNamespace = nameUtil.findLongestNamePrefix(child, symbols.keySet());
-            if (exportedNamespace != null) {
-              String localName = symbols.get(exportedNamespace);
-              Node export =
-                  new Node(Token.EXPORT, createExportSpecs(Node.newString(Token.NAME, localName)));
-              export.useSourceInfoFromForTree(child);
-              parent.addChildAfter(export, n);
-              // Registers symbol for rewriting local uses.
-              registerLocalSymbol(
-                  child.getSourceFileName(), exportedNamespace, exportedNamespace, localName);
-            }
-            break;
-          }
-        case ASSIGN:
-          if (!fileToModule.containsKey(fileName)) {
-            break;
-          }
-          FileModule module = fileToModule.get(fileName);
-          Node lhs = child.getFirstChild();
-          Map<String, String> symbols = module.exportedNamespacesToSymbols;
+            case ASSIGN -> {
+                if (!fileToModule.containsKey(fileName)) {
+                    break;
+                }
+                FileModule module = fileToModule.get(fileName);
+                Node lhs = child.getFirstChild();
+                Map<String, String> symbols = module.exportedNamespacesToSymbols;
 
-          // We export the longest valid prefix
-          String exportedNamespace = nameUtil.findLongestNamePrefix(lhs, symbols.keySet());
-          if (exportedNamespace != null) {
-            convertExportAssignment(
-                child, exportedNamespace, symbols.get(exportedNamespace), fileName);
-            // Registers symbol for rewriting local uses
-            registerLocalSymbol(
-                child.getSourceFileName(),
-                exportedNamespace,
-                exportedNamespace,
-                symbols.get(exportedNamespace));
-          }
-          break;
-        default:
-          break;
-      }
+                // We export the longest valid prefix
+                String exportedNamespace = nameUtil.findLongestNamePrefix(lhs, symbols.keySet());
+                if (exportedNamespace != null) {
+                    convertExportAssignment(child, exportedNamespace, symbols.get(exportedNamespace), fileName);
+                    // Registers symbol for rewriting local uses
+                    registerLocalSymbol(child.getSourceFileName(), exportedNamespace, exportedNamespace, symbols.get(exportedNamespace));
+                }
+            }
+            default -> {
+            }
+        }
     }
 
     private void collectMetdataForExports(Node namedNode, String fileName) {

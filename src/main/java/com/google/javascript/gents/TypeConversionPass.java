@@ -74,131 +74,119 @@ public final class TypeConversionPass implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       JSDocInfo bestJSDocInfo = null;
-      switch (n.getToken()) {
-        case FUNCTION:
-          bestJSDocInfo = NodeUtil.getBestJSDocInfo(n);
-          if (bestJSDocInfo != null
-              && bestJSDocInfo.isConstructorOrInterface()
-              && !isConstructorInGoogDefineClass(n)) {
-            convertConstructorToClass(n, bestJSDocInfo);
-          }
-          break;
-        case CALL:
-          if (n.getFirstChild().matchesQualifiedName("goog.defineClass")) {
-            convertDefineClassToClass(n);
-          }
-          break;
-        case GETPROP:
-          // Converts a class inner typedef into either (1) a top level interface, which then later
-          // has its members converted in TypeAnnotationPass; or (2) a type alias.
-          // Most class inner @typedef meant @record in closure but they were added before @record
-          // was supported. Also in TypeScript interfaces are preferred to type alias because of
-          // better error reporting and extendability. However simple types such as string are
-          // still type aliases.
-          bestJSDocInfo = NodeUtil.getBestJSDocInfo(n);
-          if (bestJSDocInfo == null || !bestJSDocInfo.hasTypedefType()) {
-            break;
-          }
-
-          Node typedefNode = bestJSDocInfo.getTypedefType().getRoot();
-          if (containsObject(typedefNode)) {
-            // Interface
-            String interfaceName = n.getSecondChild().getString();
-            Node interfaceMember = Node.newString(Token.INTERFACE_MEMBERS, interfaceName);
-            typesToRename.put(n.getQualifiedName(), interfaceName);
-            typesToFilename.put(n.getQualifiedName(), n.getSourceFileName());
-            types.put(interfaceName, interfaceMember);
-            interfaceMember.setJSDocInfo(bestJSDocInfo);
-            Node interfaceNode = new Node(Token.INTERFACE, IR.empty(), IR.empty(), interfaceMember);
-            Node nameNode = Node.newString(Token.NAME, interfaceName);
-            nameNode.addChildToBack(interfaceNode);
-            Node exportNode = new Node(Token.EXPORT, new Node(Token.CONST, nameNode));
-            replaceExpressionOrAssignment(n, parent, exportNode);
-            break;
-          }
-
-          // Typedef of simple types
-          createTypeAlias(n, parent);
-          break;
-        case VAR:
-        case LET:
-        case CONST:
-          createTypeAlias(n, parent);
-          break;
-        case NAME:
-          // NAME token can occur in many locations. Only create an alias for ones that are direct
-          // children of statements.
-          // Without this check, gents will try to create two aliases for code like:
-          // /** @typedef {...} */
-          // Foo.Bar = Buz;
-          // Because of the NAME tokens - Bar and Buz.
-          if (parent.isExprResult() && parent.getChildCount() == 1) {
-            createTypeAlias(n, parent);
-          }
-          break;
-
-        case CLASS:
-          JSDocInfo jsDoc = n.getJSDocInfo();
-          // If a class has the @interface or @record annotation we will respect that and turn it into an interface.
-          if (jsDoc != null && jsDoc.isInterface()) {
-            Node className = n.getFirstChild();
-            Node classExtends = n.getSecondChild();
-            Node classMembers = n.getLastChild();
-            // Change CLASS_EXTENDS to INTERFACE_EXTENDS
-            Node interfaceExtends =
-                classExtends.isEmpty()
-                    ? classExtends.detach()
-                    : new Node(Token.INTERFACE_EXTENDS, classExtends.detach());
-            // Also merge with any @extends if present.
-            for (JSTypeExpression extendedInterface : jsDoc.getExtendedInterfaces()) {
-              if (interfaceExtends.isEmpty()) {
-                interfaceExtends = new Node(Token.INTERFACE_EXTENDS);
-              }
-              interfaceExtends.addChildToBack(extendedInterface.getRoot());
+        switch (n.getToken()) {
+            case FUNCTION -> {
+                bestJSDocInfo = NodeUtil.getBestJSDocInfo(n);
+                if (bestJSDocInfo != null && bestJSDocInfo.isConstructorOrInterface() && !isConstructorInGoogDefineClass(n)) {
+                    convertConstructorToClass(n, bestJSDocInfo);
+                }
             }
-
-            // Collect MEMBER_VARIABLE_DEF's and MEMBER_FUNCTION_DEF's and use those as the new interface members.
-            Node interfaceMembers = new Node(Token.INTERFACE_MEMBERS);
-            for (Node member : classMembers.children()) {
-              if (!member.isMemberFunctionDef()) {
-                continue;
-              }
-
-              Node functionNode = member.getFirstChild();
-              if (!functionNode.isFunction()) {
-                continue;
-              }
-
-              // MEMBER_VARIABLE_DEF is in the constructor.
-              if (getEnclosingFunctionName(functionNode).equals("constructor")) {
-                Node blockNode = functionNode.getLastChild();
-                if (!blockNode.isBlock()) {
-                  continue;
+            case CALL -> {
+                if (n.getFirstChild().matchesQualifiedName("goog.defineClass")) {
+                    convertDefineClassToClass(n);
+                }
+            }
+            case GETPROP -> {
+                // Converts a class inner typedef into either (1) a top level interface, which then later
+                // has its members converted in TypeAnnotationPass; or (2) a type alias.
+                // Most class inner @typedef meant @record in closure but they were added before @record
+                // was supported. Also in TypeScript interfaces are preferred to type alias because of
+                // better error reporting and extendability. However simple types such as string are
+                // still type aliases.
+                bestJSDocInfo = NodeUtil.getBestJSDocInfo(n);
+                if (bestJSDocInfo == null || !bestJSDocInfo.hasTypedefType()) {
+                    break;
                 }
 
-                for (Node exprResult : blockNode.children()) {
-                  ClassMemberDeclaration declaration =
-                      ClassMemberDeclaration.newDeclarationOnThis(exprResult);
-                  if (declaration != null && declaration.jsDoc != null) {
-                    interfaceMembers.addChildToBack(createMemberVariableDef(declaration));
-                  }
+                Node typedefNode = bestJSDocInfo.getTypedefType().getRoot();
+                if (containsObject(typedefNode)) {
+                    // Interface
+                    String interfaceName = n.getSecondChild().getString();
+                    Node interfaceMember = Node.newString(Token.INTERFACE_MEMBERS, interfaceName);
+                    typesToRename.put(n.getQualifiedName(), interfaceName);
+                    typesToFilename.put(n.getQualifiedName(), n.getSourceFileName());
+                    types.put(interfaceName, interfaceMember);
+                    interfaceMember.setJSDocInfo(bestJSDocInfo);
+                    Node interfaceNode = new Node(Token.INTERFACE, IR.empty(), IR.empty(), interfaceMember);
+                    Node nameNode = Node.newString(Token.NAME, interfaceName);
+                    nameNode.addChildToBack(interfaceNode);
+                    Node exportNode = new Node(Token.EXPORT, new Node(Token.CONST, nameNode));
+                    replaceExpressionOrAssignment(n, parent, exportNode);
+                    break;
                 }
-              } else {
-                stripFunctionBody(member);
-                interfaceMembers.addChildToBack(member.detach());
-              }
-            }
 
-            Node newNode =
-                new Node(Token.INTERFACE, className.detach(), interfaceExtends, interfaceMembers);
-            addTypeToScope(newNode, className.getString());
-            newNode.useSourceInfoFrom(n);
-            nodeComments.replaceWithComment(n, newNode);
-          }
-          break;
-        default:
-          break;
-      }
+                // Typedef of simple types
+                createTypeAlias(n, parent);
+            }
+            case VAR, LET, CONST -> createTypeAlias(n, parent);
+            case NAME -> {
+                // NAME token can occur in many locations. Only create an alias for ones that are direct
+                // children of statements.
+                // Without this check, gents will try to create two aliases for code like:
+                // /** @typedef {...} */
+                // Foo.Bar = Buz;
+                // Because of the NAME tokens - Bar and Buz.
+                if (parent.isExprResult() && parent.getChildCount() == 1) {
+                    createTypeAlias(n, parent);
+                }
+            }
+            case CLASS -> {
+                JSDocInfo jsDoc = n.getJSDocInfo();
+                // If a class has the @interface or @record annotation we will respect that and turn it into an interface.
+                if (jsDoc != null && jsDoc.isInterface()) {
+                    Node className = n.getFirstChild();
+                    Node classExtends = n.getSecondChild();
+                    Node classMembers = n.getLastChild();
+                    // Change CLASS_EXTENDS to INTERFACE_EXTENDS
+                    Node interfaceExtends = classExtends.isEmpty() ? classExtends.detach() : new Node(Token.INTERFACE_EXTENDS, classExtends.detach());
+                    // Also merge with any @extends if present.
+                    for (JSTypeExpression extendedInterface : jsDoc.getExtendedInterfaces()) {
+                        if (interfaceExtends.isEmpty()) {
+                            interfaceExtends = new Node(Token.INTERFACE_EXTENDS);
+                        }
+                        interfaceExtends.addChildToBack(extendedInterface.getRoot());
+                    }
+
+                    // Collect MEMBER_VARIABLE_DEF's and MEMBER_FUNCTION_DEF's and use those as the new interface members.
+                    Node interfaceMembers = new Node(Token.INTERFACE_MEMBERS);
+                    for (Node member : classMembers.children()) {
+                        if (!member.isMemberFunctionDef()) {
+                            continue;
+                        }
+
+                        Node functionNode = member.getFirstChild();
+                        if (!functionNode.isFunction()) {
+                            continue;
+                        }
+
+                        // MEMBER_VARIABLE_DEF is in the constructor.
+                        if (getEnclosingFunctionName(functionNode).equals("constructor")) {
+                            Node blockNode = functionNode.getLastChild();
+                            if (!blockNode.isBlock()) {
+                                continue;
+                            }
+
+                            for (Node exprResult : blockNode.children()) {
+                                ClassMemberDeclaration declaration = ClassMemberDeclaration.newDeclarationOnThis(exprResult);
+                                if (declaration != null && declaration.jsDoc != null) {
+                                    interfaceMembers.addChildToBack(createMemberVariableDef(declaration));
+                                }
+                            }
+                        } else {
+                            stripFunctionBody(member);
+                            interfaceMembers.addChildToBack(member.detach());
+                        }
+                    }
+
+                    Node newNode = new Node(Token.INTERFACE, className.detach(), interfaceExtends, interfaceMembers);
+                    addTypeToScope(newNode, className.getString());
+                    newNode.useSourceInfoFrom(n);
+                    nodeComments.replaceWithComment(n, newNode);
+                }
+            }
+            default -> {
+            }
+        }
     }
 
     private void stripFunctionBody(Node member) {
@@ -234,20 +222,14 @@ public final class TypeConversionPass implements CompilerPass {
     private void createTypeAlias(Node n, Node parent) {
       JSDocInfo bestJSDocInfo = NodeUtil.getBestJSDocInfo(n);
       if (bestJSDocInfo != null && bestJSDocInfo.hasTypedefType()) {
-        String name;
-        switch (n.getToken()) {
-          case NAME:
-            name = n.getString();
-            break;
-          case GETPROP:
-            // Inner typedef
-            name = n.getSecondChild().getString();
-            break;
-          default:
-            name = n.getFirstChild().getString();
-            break;
-        }
-        Node typeDef = Node.newString(Token.TYPE_ALIAS, name);
+        String name = switch (n.getToken()) {
+            case NAME -> n.getString();
+            case GETPROP ->
+                // Inner typedef
+                            n.getSecondChild().getString();
+            default -> n.getFirstChild().getString();
+        };
+          Node typeDef = Node.newString(Token.TYPE_ALIAS, name);
         nodeComments.moveComment(n, typeDef);
         types.put(name, typeDef);
         typeDef.setJSDocInfo(bestJSDocInfo);
@@ -283,27 +265,25 @@ public final class TypeConversionPass implements CompilerPass {
   private class TypeMemberConverter extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getToken()) {
-        case CLASS:
-          addClassToScope(n);
-          break;
-        case EXPR_RESULT:
-          ClassMemberDeclaration declaration = ClassMemberDeclaration.newDeclaration(n, types);
-          if (declaration == null) {
-            break;
-          }
-          if (declaration.rhs != null && declaration.rhs.isFunction()) {
-            moveMethodsIntoClasses(declaration);
-          } else {
-            // Ignore field declarations without a type annotation
-            if (declaration.jsDoc != null && declaration.jsDoc.getType() != null) {
-              moveFieldsIntoClasses(declaration);
+        switch (n.getToken()) {
+            case CLASS -> addClassToScope(n);
+            case EXPR_RESULT -> {
+                ClassMemberDeclaration declaration = ClassMemberDeclaration.newDeclaration(n, types);
+                if (declaration == null) {
+                    break;
+                }
+                if (declaration.rhs != null && declaration.rhs.isFunction()) {
+                    moveMethodsIntoClasses(declaration);
+                } else {
+                    // Ignore field declarations without a type annotation
+                    if (declaration.jsDoc != null && declaration.jsDoc.getType() != null) {
+                        moveFieldsIntoClasses(declaration);
+                    }
+                }
             }
-          }
-          break;
-        default:
-          break;
-      }
+            default -> {
+            }
+        }
     }
   }
 
@@ -410,27 +390,28 @@ public final class TypeConversionPass implements CompilerPass {
   private class EnumConverter extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getToken()) {
-        case VAR:
-        case LET:
-        case CONST:
-          if (n.getJSDocInfo() == null || n.getJSDocInfo().getEnumParameterType() == null) return;
-          JSTypeExpression enumExp = n.getJSDocInfo().getEnumParameterType();
-          if (!enumExp.getRoot().isString()) return;
-          String enumTypeStr = enumExp.getRoot().getString();
-          if (!enumTypeStr.equals("number") && !enumTypeStr.equals("string")) return;
+        switch (n.getToken()) {
+            case VAR, LET, CONST -> {
+                if (n.getJSDocInfo() == null || n.getJSDocInfo().getEnumParameterType() == null)
+                    return;
+                JSTypeExpression enumExp = n.getJSDocInfo().getEnumParameterType();
+                if (!enumExp.getRoot().isString())
+                    return;
+                String enumTypeStr = enumExp.getRoot().getString();
+                if (!enumTypeStr.equals("number") && !enumTypeStr.equals("string"))
+                    return;
 
-          Node name = n.getFirstChild().detach();
-          Node members = name.getFirstChild().detach();
+                Node name = n.getFirstChild().detach();
+                Node members = name.getFirstChild().detach();
 
-          Node enumMembers = transformMembers(members, enumTypeStr.equals("number"));
-          Node enumNode = new Node(Token.ENUM, name, enumMembers);
-          parent.replaceChild(n, enumNode);
-          compiler.reportChangeToEnclosingScope(parent);
-          break;
-        default:
-          break;
-      }
+                Node enumMembers = transformMembers(members, enumTypeStr.equals("number"));
+                Node enumNode = new Node(Token.ENUM, name, enumMembers);
+                parent.replaceChild(n, enumNode);
+                compiler.reportChangeToEnclosingScope(parent);
+            }
+            default -> {
+            }
+        }
     }
 
     private Node transformMembers(Node members, boolean enumIsOfNumberType) {
@@ -464,16 +445,12 @@ public final class TypeConversionPass implements CompilerPass {
   private class InheritanceConverter extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getToken()) {
-        case EXPR_RESULT:
-          maybeRemoveInherits(n);
-          break;
-        case CALL:
-          maybeReplaceSuperCall(n);
-          break;
-        default:
-          break;
-      }
+        switch (n.getToken()) {
+            case EXPR_RESULT -> maybeRemoveInherits(n);
+            case CALL -> maybeReplaceSuperCall(n);
+            default -> {
+            }
+        }
     }
   }
 

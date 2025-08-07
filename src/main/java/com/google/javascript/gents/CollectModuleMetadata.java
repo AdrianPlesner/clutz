@@ -86,68 +86,61 @@ public final class CollectModuleMetadata extends AbstractTopLevelCallback implem
     }
 
     Node child = n.getFirstChild();
-    switch (child.getToken()) {
-      case CALL:
-        // Ignore unusual call cases
-        // (function() {...})()
-        // nested().calls()
-        if (child.getFirstChild().getQualifiedName() == null) {
-          break;
-        }
-        switch (child.getFirstChild().getQualifiedName()) {
-          case "goog.module":
-            if (!parent.getFirstChild().equals(n)) { // is first statement
-              compiler.report(
-                  JSError.make(
-                      n,
-                      GentsErrorManager.GENTS_MODULE_PASS_ERROR,
-                      "goog.module must be the first top level statement."));
-              break;
-            }
-            registerGoogModule(child, filename, child.getLastChild().getString());
-            break;
-          case "goog.provide":
-            registerProvidesModule(child, filename, child.getLastChild().getString());
-            break;
-          case "goog.require":
-            if (module != null) {
-              module.reportImport();
-            }
-            break;
-          default:
-            break;
-        }
-        break;
-      case GETPROP:
-        // Typedefs are often just on property gets, not on assignments.
-        JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(n);
-        if (jsdoc != null && jsdoc.containsTypeDefinition() && module != null) {
-          module.maybeAddExport(child);
-        }
-        break;
-      case ASSIGN:
-        if (module == null) {
-          break;
-        }
-        Node maybeExportNode = child.getFirstChild();
-        if (maybeExportNode != null) {
-          String maybeExportString = maybeExportNode.getQualifiedName();
-          if (maybeExportString != null
-              && (maybeExportString.equals("exports")
-                  || module.jsNamespaces.contains(maybeExportString))) {
-            if (module.isGoogModule) {
-              module.namespaceHasDefaultExport.put(
-                  Iterables.getOnlyElement(module.jsNamespaces), true);
-            } else {
-              module.namespaceHasDefaultExport.put(maybeExportString, true);
-            }
+      switch (child.getToken()) {
+          case CALL -> {
+              // Ignore unusual call cases
+              // (function() {...})()
+              // nested().calls()
+              if (child.getFirstChild().getQualifiedName() == null) {
+                  break;
+              }
+              switch (child.getFirstChild().getQualifiedName()) {
+                  case "goog.module":
+                      if (!parent.getFirstChild().equals(n)) { // is first statement
+                          compiler.report(JSError.make(n, GentsErrorManager.GENTS_MODULE_PASS_ERROR, "goog.module must be the first top level statement."));
+                          break;
+                      }
+                      registerGoogModule(child, filename, child.getLastChild().getString());
+                      break;
+                  case "goog.provide":
+                      registerProvidesModule(child, filename, child.getLastChild().getString());
+                      break;
+                  case "goog.require":
+                      if (module != null) {
+                          module.reportImport();
+                      }
+                      break;
+                  default:
+                      break;
+              }
           }
-        }
-        module.maybeAddExport(maybeExportNode);
-        break;
-      default:
-        break;
-    }
+          case GETPROP -> {
+              // Typedefs are often just on property gets, not on assignments.
+              JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(n);
+              if (jsdoc != null && jsdoc.containsTypeDefinition() && module != null) {
+                  module.maybeAddExport(child);
+              }
+          }
+          case ASSIGN -> {
+              if (module == null) {
+                  break;
+              }
+              Node maybeExportNode = child.getFirstChild();
+              if (maybeExportNode != null) {
+                  String maybeExportString = maybeExportNode.getQualifiedName();
+                  if (maybeExportString != null && (maybeExportString.equals("exports") || module.jsNamespaces.contains(maybeExportString))) {
+                      if (module.isGoogModule) {
+                          module.namespaceHasDefaultExport.put(Iterables.getOnlyElement(module.jsNamespaces), true);
+                      } else {
+                          module.namespaceHasDefaultExport.put(maybeExportString, true);
+                      }
+                  }
+              }
+              module.maybeAddExport(maybeExportNode);
+          }
+          default -> {
+          }
+      }
   }
 
   /** Registers a goog.module namespace for future lookup. */

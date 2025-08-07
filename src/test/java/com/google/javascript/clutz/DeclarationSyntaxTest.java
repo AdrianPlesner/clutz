@@ -24,6 +24,7 @@ import org.junit.runners.JUnit4;
 /**
  * A test that checks the syntax of all {@code .d.ts} files using {@code tsc}, as a sanity check.
  */
+@SuppressWarnings("UnstableApiUsage")
 @RunWith(JUnit4.class)
 public class DeclarationSyntaxTest {
   private static final FilenameFilter JS_MULTIFILE_PARTIAL =
@@ -103,11 +104,11 @@ public class DeclarationSyntaxTest {
 
   @Test
   public void testDeclarationUsage() throws Exception {
-    doTestDeclarationUsage(TS_SOURCES);
+    doTestDeclarationUsage();
   }
 
-  private void doTestDeclarationUsage(FilenameFilter filenameFilter) throws Exception {
-    List<File> inputs = DeclarationGeneratorTest.getTestInputFilesNoPartial(filenameFilter);
+  private void doTestDeclarationUsage() throws Exception {
+    List<File> inputs = DeclarationGeneratorTest.getTestInputFilesNoPartial(DeclarationGeneratorTest.TS_SOURCES);
     final List<String> tscCommand = Lists.newArrayList(TSC.toString(), "-m", "commonjs");
     tscCommand.addAll(TSC_FLAGS);
 

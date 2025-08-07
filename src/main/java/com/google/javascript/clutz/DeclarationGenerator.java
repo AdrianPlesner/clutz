@@ -3047,26 +3047,31 @@ class DeclarationGenerator {
     }
 
     private String getPromiseMethod(String propName, String className) {
-      switch (propName) {
-        case "resolve":
-          // TODO(lucassloan): goog.Promise has bad types that are coerced to any, so explicitly
-          // emit any
-          // and change to the proper type `(value: googPromise< T , any > | T): googPromise<T,
-          // any>`
-          // when the callers have been fixed.
-          if (className.equals("ಠ_ಠ.clutz.goog.Promise")) {
-            return "resolve < T >(value: PromiseLike < T > | T): any;";
-          } else {
-            return "resolve < T >(value: PromiseLike < T > | T): " + className + " < T >;";
-          }
-        case "race":
-          return "race < T > (values : T [] ) : " + className + " < T > ;";
-          // TODO(rado): angular.d.ts has improved types for .all, replace with all overrides from
-          // https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/angular/index.d.ts#L1014
-        case "all":
-          return "all(promises : " + className + " < any > [] ) : " + className + " < any [] > ;";
-        default:
-      }
+        switch (propName) {
+            case "resolve" -> {
+                // emit any
+                // and change to the proper type `(value: googPromise< T , any > | T): googPromise<T,
+                // any>`
+                // when the callers have been fixed.
+                if (className.equals("ಠ_ಠ.clutz.goog.Promise")) {
+                    return "resolve < T >(value: PromiseLike < T > | T): any;";
+                } else {
+                    return "resolve < T >(value: PromiseLike < T > | T): " + className + " < T >;";
+                }  // TODO(lucassloan): goog.Promise has bad types that are coerced to any, so explicitly
+                // emit any
+                // and change to the proper type `(value: googPromise< T , any > | T): googPromise<T,
+                // any>`
+                // when the callers have been fixed.
+            }
+            case "race" -> {
+                return "race < T > (values : T [] ) : " + className + " < T > ;";
+            }
+            // TODO(rado): angular.d.ts has improved types for .all, replace with all overrides from
+            // https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/angular/index.d.ts#L1014
+            case "all" -> {
+                return "all(promises : " + className + " < any > [] ) : " + className + " < any [] > ;";
+            }
+        }
       return null;
     }
 
@@ -3543,7 +3548,7 @@ class DeclarationGenerator {
       }
     }
 
-    private class NamedTypePair implements Comparable<NamedTypePair> {
+    private static class NamedTypePair implements Comparable<NamedTypePair> {
       private final String name;
       private final JSType type;
 
@@ -3562,14 +3567,10 @@ class DeclarationGenerator {
   }
 
   private boolean isFunctionPrototypeProp(String propName) {
-    switch (propName) {
-      case "apply":
-      case "call":
-      case "bind":
-        return true;
-      default:
-        return false;
-    }
+      return switch (propName) {
+          case "apply", "call", "bind" -> true;
+          default -> false;
+      };
   }
 
   private boolean isOrdinaryFunction(JSType ftype) {

@@ -37,8 +37,7 @@ class ModuleRenameLogger {
 
     @Override
     public boolean equals(Object obj) {
-      if (!(obj instanceof LogItem)) return false;
-      LogItem o = (LogItem) obj;
+      if (!(obj instanceof LogItem o)) return false;
       return this.originalName.equals(o.originalName)
           && this.jsFile.equals(o.jsFile)
           && this.defaultRename.equals(o.defaultRename);
