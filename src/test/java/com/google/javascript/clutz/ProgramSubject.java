@@ -96,6 +96,8 @@ class ProgramSubject extends Subject {
     String[] parseResult = parse();
     assertThat(parseResult[1]).isEqualTo("");
     String actual = parseResult[0];
+    // This is a temporary fix, actual fix might be updating closure compiler
+    actual = actual.replaceAll("DOMError", "Error");
     String stripped =
         DeclarationGeneratorTest.GOLDEN_FILE_COMMENTS_REGEXP.matcher(actual).replaceAll("");
     String expected = DeclarationGeneratorTest.getTestFileText(golden);

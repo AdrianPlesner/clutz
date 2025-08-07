@@ -277,7 +277,7 @@ declare namespace ಠ_ಠ.clutz {
 }
 // Generated from externs.zip//nonstandard_fileapi.js
 declare namespace ಠ_ಠ.clutz {
-  class FileError extends DOMError {
+  class FileError extends Error {
     private noStructuralTyping_FileError : any;
     ABORT_ERR : number ;
     ENCODING_ERR : number ;

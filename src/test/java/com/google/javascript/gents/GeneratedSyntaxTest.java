@@ -42,7 +42,7 @@ public class GeneratedSyntaxTest {
           "--noEmit",
           "--skipDefaultLibCheck",
           "--lib",
-          "es5,dom,es2015.iterable,esnext",
+          "es2024,esnext",
           "--strictNullChecks");
 
   // TODO(bowenni): Supports multiFileTests. Currently only compiles singleTests.
