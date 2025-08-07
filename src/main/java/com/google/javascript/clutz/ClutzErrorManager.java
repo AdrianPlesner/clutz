@@ -10,6 +10,7 @@ import java.io.PrintStream;
  * An error manager that delays reporting through {@link #doGenerateReport()}, allows failing fast,
  * and that adds special, Clutz-specific errors.
  */
+@SuppressWarnings("deprecation")
 final class ClutzErrorManager extends PrintStreamErrorManager {
   private final boolean debug;
   boolean reportClutzMissingTypes = true;

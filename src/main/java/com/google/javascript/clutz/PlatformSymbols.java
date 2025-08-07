@@ -245,7 +245,6 @@ public class PlatformSymbols {
           "PromptResponseObject",
           "PushPermissionDescriptor",
           "QueuingStrategy",
-          "QueuingStrategy",
           "RGBColor",
           "RTCCertificate",
           "RTCConfigurationInterface_",

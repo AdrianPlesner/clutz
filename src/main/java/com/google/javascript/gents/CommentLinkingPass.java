@@ -16,16 +16,16 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Links comments directly to the AST to preserve locations in file */
+/** Links comments directly to the AST to preserve locations in file. */
 public final class CommentLinkingPass implements CompilerPass {
-  /** Regex matcher for all 3 empty comment types */
+  /** Regex matcher for all 3 empty comment types. */
   private static final Pattern EMPTY_COMMENT_REGEX =
       Pattern.compile("^\\s*(\\/\\/|\\/\\*(\\s|\\*)*\\*\\/)\\s*$");
 
   /** Regex fragment that optionally matches the beginning of a JSDOC line. */
   private static final String BEGIN_JSDOC_LINE = "(?<block>[ \t]*\\*[ \t]*)?";
 
-  /** Regex fragment to optionally match end-of-line */
+  /** Regex fragment to optionally match end-of-line. */
   private static final String EOL = "(?<eol>[ \t]*\n)?";
 
   /**
@@ -106,8 +106,8 @@ public final class CommentLinkingPass implements CompilerPass {
    * together in order to assure that the we do not break up the same coherent thought. Comment
    * groups are separated based on empty lines or lines of code.
    */
-  private class LinkCommentsForOneFile implements Callback {
-    /** List of all comments in the file */
+  private class LinkCommentsForOneFile implements NodeTraversal.Callback {
+    /** List of all comments in the file. */
     private final ImmutableList<Comment> comments;
     /** Collects of all comments that are grouped together. */
     private List<Comment> commentBuffer = new ArrayList<>();
@@ -180,8 +180,8 @@ public final class CommentLinkingPass implements CompilerPass {
     }
 
     /** Removes unneeded tags and markers from the comment. */
-    private String filterCommentContent(Type type, String comment) {
-      if (type == Type.JSDOC) {
+    private String filterCommentContent(Comment.Type type, String comment) {
+      if (type == Comment.Type.JSDOC) {
         for (Pattern p : JSDOC_REPLACEMENTS_WITH_KEEP) {
           Matcher m = p.matcher(comment);
           if (m.find() && m.group("keep") != null && m.group("keep").trim().length() > 0) {
@@ -305,9 +305,12 @@ public final class CommentLinkingPass implements CompilerPass {
         // Comment on same line as code -- we have to make sure this is the node we should attach
         // it to.
         if (parent.isCall()) {
-          // We're inside a function call, we have to be careful about which node to attach to, since comments
+          // We're inside a function call, we have to be careful about which node to attach to,
+          // since comments
           // can go before or after an argument.
-          if (linkFunctionArgs(n, line)) return true;
+          if (linkFunctionArgs(n, line)) {
+            return true;
+          }
         } else if (getCurrentComment().location.end.column < n.getCharno()) {
           // comment is before this node, so attach it
           linkCommentBufferToNode(n);
@@ -336,7 +339,8 @@ public final class CommentLinkingPass implements CompilerPass {
         int endOfComment = getCurrentComment().location.end.column;
         int startOfNextNode = n.getNext().getCharno();
         if (endOfComment < startOfNextNode) {
-          // the comment is between this node and the next node, so check which side of the comment the comma
+          // the comment is between this node and the next node, so check which side of the comment
+          // the comma
           // separating the arguments is on to decide which argument to attach it to.
           String lineContents =
               compiler.getInput(new InputId(n.getSourceFileName())).getSourceFile().getLine(line);

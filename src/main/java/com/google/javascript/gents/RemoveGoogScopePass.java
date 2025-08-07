@@ -57,7 +57,6 @@ public final class RemoveGoogScopePass extends AbstractTopLevelCallback implemen
         rewriteGoogScope(n);
         return;
       default:
-        return;
     }
   }
 
@@ -183,6 +182,5 @@ public final class RemoveGoogScopePass extends AbstractTopLevelCallback implemen
       Node fullName = NodeUtil.newQName(compiler, providedNamespace + suffix);
       assign.replaceChild(lhs, fullName);
     }
-    return;
   }
 }

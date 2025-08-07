@@ -526,8 +526,7 @@ public final class TypeAnnotationPass implements CompilerPass {
   private TypeDeclarationNode indexSignatureType(
       TypeDeclarationNode keyType, TypeDeclarationNode valueType) {
     TypeDeclarationNode node = new TypeDeclarationNode(Token.INDEX_SIGNATURE);
-    TypeDeclarationNode first = null;
-    first = new TypeDeclarationNode(Token.STRING_KEY, "key");
+    TypeDeclarationNode first = new TypeDeclarationNode(Token.STRING_KEY, "key");
     first.setDeclaredTypeExpression(keyType);
     node.addChildToBack(first);
     node.setDeclaredTypeExpression(valueType);

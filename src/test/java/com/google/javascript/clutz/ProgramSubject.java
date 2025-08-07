@@ -18,6 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -203,7 +204,7 @@ class ProgramSubject extends Subject {
       String dts =
           generator.generateDeclarations(
               sourceFiles, externFiles, Depgraph.forRoots(roots, nonroots));
-      String diagnostics = out.toString();
+      String diagnostics = out.toString(Charset.defaultCharset());
       return new String[] {dts, diagnostics};
     } finally {
       System.setErr(err);

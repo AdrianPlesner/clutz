@@ -27,22 +27,16 @@ public class GeneratedSyntaxTest {
   private static final ImmutableSet<String> EXCLUDED_TS =
       ImmutableSet.of("classes.ts", "module_namespace.ts", "static_methods.ts", "proto_methods.ts");
 
-  private static final FilenameFilter COMPILABLE_TS_SOURCES =
-      new FilenameFilter() {
-        @Override
-        public boolean accept(File dir, String name) {
-          return TS_SOURCES.accept(dir, name)
-              && !D_TS.accept(dir, name)
-              && !EXCLUDED_TS.contains(name);
-        }
-      };
+  private static final FilenameFilter COMPILABLE_TS_SOURCES = (File dir, String name) -> TS_SOURCES.accept(dir, name)
+      && !D_TS.accept(dir, name)
+      && !EXCLUDED_TS.contains(name);
 
   private static final ImmutableList<String> TSC_FLAGS =
       ImmutableList.of(
           "--noEmit",
           "--skipDefaultLibCheck",
           "--lib",
-          "es2024,esnext",
+          "es2024, esnext",
           "--strictNullChecks");
 
   // TODO(bowenni): Supports multiFileTests. Currently only compiles singleTests.
@@ -53,7 +47,7 @@ public class GeneratedSyntaxTest {
             COMPILABLE_TS_SOURCES, TypeScriptGeneratorTest.singleTestPath);
     List<File> dtsInputs =
         TypeScriptGeneratorTest.getTestInputFiles(D_TS, TypeScriptGeneratorTest.singleTestPath);
-    List<String> tscCommand = null;
+    List<String> tscCommand;
 
     for (File tsInput : tsInputs) {
       tscCommand = Lists.newArrayList(DeclarationSyntaxTest.TSC.toString(), "-m", "commonjs");

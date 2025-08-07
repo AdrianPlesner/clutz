@@ -34,10 +34,6 @@ public class DeclarationSyntaxTest {
       (File dir, String name) ->
           JS_NO_EXTERNS.accept(dir, name) && dir.getName().equals("partialCrossModuleTypeImports");
 
-  private static final FilenameFilter JS_ALIASED_INTERFACE =
-      (File dir, String name) ->
-          JS_NO_EXTERNS.accept(dir, name) && dir.getName().equals("aliasedInterface");
-
   public static final Path TSC =
       FileSystems.getDefault().getPath("node_modules", "typescript", "bin", "tsc");
 
