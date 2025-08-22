@@ -3,7 +3,7 @@ plugins {
   //id 'eclipse'
 
   // Generate coverage during tests.
-  id 'jacoco'
+  id("jacoco")
 
   // Generate executable scripts
   id 'application'
@@ -84,6 +84,10 @@ dependencies {
 
   testImplementation 'junit:junit:4.11'
   testImplementation 'com.google.truth:truth:1.0'
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.errorprone.disableWarningsInGeneratedCode = true
 }
 
 tasks.withType(Test) {
