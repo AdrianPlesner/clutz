@@ -8,8 +8,8 @@ plugins {
   // Generate executable scripts
   id 'application'
 
-  // enforces consistent formatting
-  id 'com.github.sherter.google-java-format' version '0.9'
+  // enforces consistent formatting NO LONGER MAINTAINED NOT COMPATIBLE PAST JAVA 14
+  //id 'com.github.sherter.google-java-format' version '0.9'
 
   // enforces java style
   id 'net.ltgt.errorprone' version '4.3.0'
@@ -97,9 +97,9 @@ test {
   }
 }
 
-googleJavaFormat {
+/*googleJavaFormat {
   toolVersion '1.3'
-}
+}*/
 
 // configure the test output
 testlogger {

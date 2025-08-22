@@ -108,7 +108,8 @@ public class DeclarationSyntaxTest {
   }
 
   private void doTestDeclarationUsage() throws Exception {
-    List<File> inputs = DeclarationGeneratorTest.getTestInputFilesNoPartial(DeclarationGeneratorTest.TS_SOURCES);
+    List<File> inputs =
+        DeclarationGeneratorTest.getTestInputFilesNoPartial(DeclarationGeneratorTest.TS_SOURCES);
     final List<String> tscCommand = Lists.newArrayList(TSC.toString(), "-m", "commonjs");
     tscCommand.addAll(TSC_FLAGS);
 

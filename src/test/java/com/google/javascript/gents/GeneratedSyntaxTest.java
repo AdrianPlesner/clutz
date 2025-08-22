@@ -27,17 +27,13 @@ public class GeneratedSyntaxTest {
   private static final ImmutableSet<String> EXCLUDED_TS =
       ImmutableSet.of("classes.ts", "module_namespace.ts", "static_methods.ts", "proto_methods.ts");
 
-  private static final FilenameFilter COMPILABLE_TS_SOURCES = (File dir, String name) -> TS_SOURCES.accept(dir, name)
-      && !D_TS.accept(dir, name)
-      && !EXCLUDED_TS.contains(name);
+  private static final FilenameFilter COMPILABLE_TS_SOURCES =
+      (File dir, String name) ->
+          TS_SOURCES.accept(dir, name) && !D_TS.accept(dir, name) && !EXCLUDED_TS.contains(name);
 
   private static final ImmutableList<String> TSC_FLAGS =
       ImmutableList.of(
-          "--noEmit",
-          "--skipDefaultLibCheck",
-          "--lib",
-          "es2024, esnext",
-          "--strictNullChecks");
+          "--noEmit", "--skipDefaultLibCheck", "--lib", "es2024, esnext", "--strictNullChecks");
 
   // TODO(bowenni): Supports multiFileTests. Currently only compiles singleTests.
   @Test
