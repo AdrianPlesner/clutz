@@ -1,35 +1,16 @@
 package com.google.javascript.gents;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import java.io.*;
+import java.util.*;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.collect.Sets;
 import com.google.common.io.ByteSource;
 import com.google.common.io.Files;
-import com.google.javascript.jscomp.CodeConsumer;
-import com.google.javascript.jscomp.CodeGenerator;
-import com.google.javascript.jscomp.CodePrinter;
+import com.google.javascript.jscomp.*;
 import com.google.javascript.jscomp.CodePrinter.Builder.CodeGeneratorFactory;
 import com.google.javascript.jscomp.CodePrinter.Format;
-import com.google.javascript.jscomp.Compiler;
-import com.google.javascript.jscomp.CompilerOptions;
-import com.google.javascript.jscomp.DiagnosticType;
-import com.google.javascript.jscomp.ErrorFormat;
-import com.google.javascript.jscomp.JSError;
-import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.rhino.Node;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.kohsuke.args4j.CmdLineException;
 
 /**
@@ -38,308 +19,274 @@ import org.kohsuke.args4j.CmdLineException;
  */
 public class TypeScriptGenerator {
 
-  /** Diagnostic that indicates Gents somehow produced an incorrect AST structure. */
-  private static final DiagnosticType GENTS_INTERNAL_ERROR =
-      DiagnosticType.error("CLUTZ_INTERNAL_ERROR", "Gents failed: {0}");
+    /** Diagnostic that indicates Gents somehow produced an incorrect AST structure. */
+    private static final DiagnosticType GENTS_INTERNAL_ERROR = DiagnosticType.error("CLUTZ_INTERNAL_ERROR", "Gents failed: {0}");
 
-  /**
-   * Command line clang-format string to format stdin. The filename 'a.ts' is only used to inform
-   * clang-format of the file type (TS).
-   */
-  private static final String[] CLANG_FORMAT = {
-    "./node_modules/.bin/clang-format", "-assume-filename=a.ts", "-style=Google"
-  };
+    /**
+     * Command line clang-format string to format stdin. The filename 'a.ts' is only used to inform
+     * clang-format of the file type (TS).
+     */
+    private static final String[] CLANG_FORMAT = { "./node_modules/.bin/clang-format", "-assume-filename=a.ts", "-style=Google" };
 
-  static {
-    // In some environments (Mac OS X programs started from Finder, like your IDE) PATH does
-    // not contain "clang-format". This property allows explicitly configuring its location.
-    String cfLocation = System.getProperty("gents.clangFormat");
-    if (cfLocation != null) {
-      CLANG_FORMAT[0] = cfLocation;
+    static {
+        // In some environments (Mac OS X programs started from Finder, like your IDE) PATH does
+        // not contain "clang-format". This property allows explicitly configuring its location.
+        String cfLocation = System.getProperty("gents.clangFormat");
+        if (cfLocation != null) {
+            CLANG_FORMAT[0] = cfLocation;
+        }
     }
-  }
 
-  public static void main(String[] args) {
-    Options options = null;
-    try {
-      options = new Options(args);
-    } catch (CmdLineException e) {
-      System.err.println(e.getMessage());
-      System.err.println("Usage: gents [options...] arguments...");
-      e.getParser().printUsage(System.err);
-      System.err.println();
-      System.exit(1);
+    public static void main(String[] args) {
+        Options options = null;
+        try {
+            options = new Options(args);
+        } catch (CmdLineException e) {
+            System.err.println(e.getMessage());
+            System.err.println("Usage: gents [options...] arguments...");
+            e.getParser().printUsage(System.err);
+            System.err.println();
+            System.exit(1);
+        }
+        TypeScriptGenerator generator = null;
+        try {
+            generator = new TypeScriptGenerator(options);
+            generator.generateTypeScript();
+            if (generator.hasErrors()) {
+                // Already reported through the print stream.
+                System.exit(2);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.err);
+            System.err.println("Uncaught exception in gents, exiting.");
+            System.exit(3);
+        }
+        System.exit(0);
     }
-    TypeScriptGenerator generator = null;
-    try {
-      generator = new TypeScriptGenerator(options);
-      generator.generateTypeScript();
-      if (generator.hasErrors()) {
-        // Already reported through the print stream.
-        System.exit(2);
-      }
-    } catch (Exception e) {
-      e.printStackTrace(System.err);
-      System.err.println("Uncaught exception in gents, exiting.");
-      System.exit(3);
+
+    private final Options opts;
+    private final Compiler compiler;
+
+    final PathUtil pathUtil;
+    private final NameUtil nameUtil;
+    private GentsErrorManager errorManager;
+
+    TypeScriptGenerator(Options opts) {
+        this.opts = opts;
+        this.compiler = new Compiler();
+        this.compiler.disableThreads();
+        setErrorStream(System.err);
+
+        this.pathUtil = new PathUtil(opts.root, opts.absolutePathPrefix);
+        this.nameUtil = new NameUtil(this.compiler);
     }
-    System.exit(0);
-  }
 
-  private final Options opts;
-  private final Compiler compiler;
+    void setErrorStream(PrintStream errStream) {
+        this.errorManager = new GentsErrorManager(errStream, ErrorFormat.MULTILINE.toFormatter(this.compiler, true), this.opts.debug);
+        this.compiler.setErrorManager(this.errorManager);
+    }
 
-  final PathUtil pathUtil;
-  private final NameUtil nameUtil;
-  private GentsErrorManager errorManager;
+    public boolean hasErrors() {
+        return this.compiler.getErrorManager().getErrorCount() > 0;
+    }
 
-  TypeScriptGenerator(Options opts) {
-    this.opts = opts;
-    this.compiler = new Compiler();
-    compiler.disableThreads();
-    setErrorStream(System.err);
+    private void generateTypeScript() {
+        List<SourceFile> srcFiles = getFiles(this.opts.srcFiles);
+        List<SourceFile> externFiles = getFiles(this.opts.externs);
+        Set<String> filesToConvert = Sets.newLinkedHashSet(this.opts.filesToConvert);
 
-    this.pathUtil = new PathUtil(opts.root, opts.absolutePathPrefix);
-    this.nameUtil = new NameUtil(compiler);
-  }
+        GentsResult result = generateTypeScript(filesToConvert, srcFiles, externFiles);
+        Map<String, String> resultFileMap = result.sourceFileMap;
 
-  void setErrorStream(PrintStream errStream) {
-    errorManager =
-        new GentsErrorManager(
-            errStream, ErrorFormat.MULTILINE.toFormatter(compiler, true), opts.debug);
-    compiler.setErrorManager(errorManager);
-  }
-
-  public boolean hasErrors() {
-    return compiler.getErrorManager().getErrorCount() > 0;
-  }
-
-  private void generateTypeScript() {
-    List<SourceFile> srcFiles = getFiles(opts.srcFiles);
-    List<SourceFile> externFiles = getFiles(opts.externs);
-    Set<String> filesToConvert = Sets.newLinkedHashSet(opts.filesToConvert);
-
-    GentsResult result = generateTypeScript(filesToConvert, srcFiles, externFiles);
-    Map<String, String> resultFileMap = result.sourceFileMap;
-
-    for (String filename : filesToConvert) {
-      String relativePath = pathUtil.getRelativePath(".", filename);
-      String filepath = pathUtil.getFilePathWithoutExtension(relativePath);
-      String tsCode = resultFileMap.get(filepath);
-      if ("-".equals(opts.output)) {
-        System.out.println("========================================");
-        System.out.println("File: " + relativePath);
-        System.out.println("========================================");
-        System.out.println(tsCode);
-      } else {
-        String tsFilename = pathUtil.removeExtension(relativePath) + ".ts";
-        File output = new File(new File(opts.output), tsFilename);
-        if (!output.getParentFile().exists() && !output.getParentFile().mkdirs()) {
-          throw new IllegalArgumentException("Unable to make directories " + output.getParent());
+        for (String filename : filesToConvert) {
+            String relativePath = this.pathUtil.getRelativePath(".", filename);
+            String filepath = this.pathUtil.getFilePathWithoutExtension(relativePath);
+            String tsCode = resultFileMap.get(filepath);
+            if ("-".equals(this.opts.output)) {
+                System.out.println("========================================");
+                System.out.println("File: " + relativePath);
+                System.out.println("========================================");
+                System.out.println(tsCode);
+            } else {
+                String tsFilename = this.pathUtil.removeExtension(relativePath) + ".ts";
+                File output = new File(new File(this.opts.output), tsFilename);
+                if (!output.getParentFile().exists() && !output.getParentFile().mkdirs()) {
+                    throw new IllegalArgumentException("Unable to make directories " + output.getParent());
+                }
+                try {
+                    Files.asCharSink(output, UTF_8).write(tsCode);
+                } catch (IOException e) {
+                    throw new IllegalArgumentException("Unable to write to file " + output.getName(), e);
+                }
+            }
         }
         try {
-          Files.asCharSink(output, UTF_8).write(tsCode);
+            if (this.opts.moduleRewriteLog != null) {
+                Files.asCharSink(new File(this.opts.moduleRewriteLog), UTF_8).write(result.moduleRewriteLog);
+            }
         } catch (IOException e) {
-          throw new IllegalArgumentException("Unable to write to file " + output.getName(), e);
+            throw new IllegalArgumentException("Unable to write to file " + this.opts.moduleRewriteLog, e);
         }
-      }
     }
-    try {
-      if (opts.moduleRewriteLog != null) {
-        Files.asCharSink(new File(opts.moduleRewriteLog), UTF_8).write(result.moduleRewriteLog);
-      }
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Unable to write to file " + opts.moduleRewriteLog, e);
-    }
-  }
 
-  /** Returns a map from the basename to the TypeScript code generated for the file. */
-  public GentsResult generateTypeScript(
-      Set<String> filesToConvert, List<SourceFile> srcFiles, List<SourceFile> externs)
-      throws AssertionError {
-    GentsResult result = new GentsResult();
+    /** Returns a map from the basename to the TypeScript code generated for the file. */
+    public GentsResult generateTypeScript(Set<String> filesToConvert, List<SourceFile> srcFiles, List<SourceFile> externs) throws AssertionError {
+        GentsResult result = new GentsResult();
 
-    final CompilerOptions compilerOpts = opts.getCompilerOptions();
-    // Compile javascript code
-    compiler.compile(externs, srcFiles, compilerOpts);
+        final CompilerOptions compilerOpts = this.opts.getCompilerOptions();
+        // Compile javascript code
+        this.compiler.compile(externs, srcFiles, compilerOpts);
 
-    Node externRoot = compiler.getRoot().getFirstChild();
-    Node srcRoot = compiler.getRoot().getLastChild();
+        Node externRoot = this.compiler.getRoot().getFirstChild();
+        Node srcRoot = this.compiler.getRoot().getLastChild();
 
-    new RemoveGoogScopePass(compiler).process(externRoot, srcRoot);
+        new RemoveGoogScopePass(this.compiler).process(externRoot, srcRoot);
 
-    CollectModuleMetadata modulePrePass =
-        new CollectModuleMetadata(compiler, nameUtil, filesToConvert);
-    modulePrePass.process(externRoot, srcRoot);
+        CollectModuleMetadata modulePrePass = new CollectModuleMetadata(this.compiler, this.nameUtil, filesToConvert);
+        modulePrePass.process(externRoot, srcRoot);
 
-    // Strips all file nodes that we are not compiling.
-    stripNonCompiledNodes(srcRoot, filesToConvert);
+        // Strips all file nodes that we are not compiling.
+        stripNonCompiledNodes(srcRoot, filesToConvert);
 
-    CommentLinkingPass commentsPass = new CommentLinkingPass(compiler);
-    commentsPass.process(externRoot, srcRoot);
-    final NodeComments comments = commentsPass.getComments();
+        CommentLinkingPass commentsPass = new CommentLinkingPass(this.compiler);
+        commentsPass.process(externRoot, srcRoot);
+        final NodeComments comments = commentsPass.getComments();
 
-    ModuleConversionPass modulePass =
-        new ModuleConversionPass(
-            compiler,
-            pathUtil,
-            nameUtil,
-            modulePrePass.getFileMap(),
-            modulePrePass.getNamespaceMap(),
-            comments,
-            opts.alreadyConvertedPrefix);
-    modulePass.process(externRoot, srcRoot);
+        ModuleConversionPass modulePass = new ModuleConversionPass(this.compiler, this.pathUtil, this.nameUtil, modulePrePass.getFileMap(), modulePrePass.getNamespaceMap(),
+                                                                   comments, this.opts.alreadyConvertedPrefix);
+        modulePass.process(externRoot, srcRoot);
 
-    new TypeConversionPass(compiler, modulePrePass, comments).process(externRoot, srcRoot);
+        new TypeConversionPass(this.compiler, modulePrePass, comments).process(externRoot, srcRoot);
 
-    new TypeAnnotationPass(
-            compiler,
-            pathUtil,
-            nameUtil,
-            modulePrePass.getSymbolMap(),
-            modulePass.getTypeRewrite(),
-            comments,
-            opts.externsMap)
-        .process(externRoot, srcRoot);
+        new TypeAnnotationPass(this.compiler, this.pathUtil, this.nameUtil, modulePrePass.getSymbolMap(), modulePass.getTypeRewrite(), comments, this.opts.externsMap).process(
+                        externRoot, srcRoot);
 
-    new StyleFixPass(compiler, comments).process(externRoot, srcRoot);
+        new StyleFixPass(this.compiler, comments).process(externRoot, srcRoot);
 
-    // We only use the source root as the extern root is ignored for codegen
-    for (Node file : srcRoot.children()) {
-      try {
-        String filepath = pathUtil.getFilePathWithoutExtension(file.getSourceFileName());
-        CodeGeneratorFactory factory =
-            new CodeGeneratorFactory() {
-              @Override
-              public CodeGenerator getCodeGenerator(Format outputFormat, CodeConsumer cc) {
-                return new GentsCodeGenerator(cc, compilerOpts, comments, opts.externsMap);
-              }
-            };
+        // We only use the source root as the extern root is ignored for codegen
+        for (Node file : srcRoot.children()) {
+            try {
+                String filepath = this.pathUtil.getFilePathWithoutExtension(file.getSourceFileName());
+                CodeGeneratorFactory factory = new CodeGeneratorFactory() {
+                    @Override
+                    public CodeGenerator getCodeGenerator(Format outputFormat, CodeConsumer cc) {
+                        return new GentsCodeGenerator(cc, compilerOpts, comments, com.google.javascript.gents.TypeScriptGenerator.this.opts.externsMap);
+                    }
+                };
 
-        String tsCode =
-            new CodePrinter.Builder(file)
-                .setCompilerOptions(opts.getCompilerOptions())
-                .setTypeRegistry(compiler.getTypeRegistry())
-                .setCodeGeneratorFactory(factory)
-                .setPrettyPrint(true)
-                .setLineBreak(true)
-                .setOutputTypes(true)
-                .build();
+                String tsCode = new CodePrinter.Builder(file).setCompilerOptions(this.opts.getCompilerOptions())
+                                                             .setTypeRegistry(this.compiler.getTypeRegistry())
+                                                             .setCodeGeneratorFactory(factory)
+                                                             .setPrettyPrint(true)
+                                                             .setLineBreak(true)
+                                                             .setOutputTypes(true)
+                                                             .build();
 
-        // For whatever reason closure sometimes prefixes the emit with an empty new line. Strip
-        // newlines not present in the original source.
-        CharSequence originalSourceCode =
-            compiler.getSourceFileContentByName(file.getSourceFileName());
+                // For whatever reason closure sometimes prefixes the emit with an empty new line. Strip
+                // newlines not present in the original source.
+                CharSequence originalSourceCode = this.compiler.getSourceFileContentByName(file.getSourceFileName());
 
-        Integer originalCount = countBeginningNewlines(originalSourceCode);
-        Integer newCount = countBeginningNewlines(tsCode);
+                Integer originalCount = countBeginningNewlines(originalSourceCode);
+                Integer newCount = countBeginningNewlines(tsCode);
 
-        if (newCount > originalCount) {
-          tsCode = tsCode.substring(newCount - originalCount);
+                if (newCount > originalCount) {
+                    tsCode = tsCode.substring(newCount - originalCount);
+                }
+
+                result.sourceFileMap.put(filepath, tryClangFormat(tsCode));
+            } catch (Throwable t) {
+                System.err.println("Failed while converting " + file.getSourceFileName());
+                t.printStackTrace(System.err);
+                this.compiler.report(JSError.make(file.getSourceFileName(), -1, -1, GENTS_INTERNAL_ERROR, t.getMessage()));
+            }
         }
 
-        result.sourceFileMap.put(filepath, tryClangFormat(tsCode));
-      } catch (Throwable t) {
-        System.err.println("Failed while converting " + file.getSourceFileName());
-        t.printStackTrace(System.err);
-        compiler.report(
-            JSError.make(file.getSourceFileName(), -1, -1, GENTS_INTERNAL_ERROR, t.getMessage()));
-      }
+        result.moduleRewriteLog = new ModuleRenameLogger().generateModuleRewriteLog(filesToConvert, modulePrePass.getNamespaceMap());
+        this.errorManager.doGenerateReport();
+        return result;
     }
 
-    result.moduleRewriteLog =
-        new ModuleRenameLogger()
-            .generateModuleRewriteLog(filesToConvert, modulePrePass.getNamespaceMap());
-    errorManager.doGenerateReport();
-    return result;
-  }
-
-  private Integer countBeginningNewlines(CharSequence originalSourceCode) {
-    Integer originalCount = 0;
-    for (Integer i = 0; i < originalSourceCode.length(); i++) {
-      // There's a terrible hack in GentsCodeGenerator that it sometimes adds " \n" instead of "\n".
-      // Count and strip that too.
-      if (originalSourceCode.charAt(i) == '\n'
-          || (originalSourceCode.charAt(i) == ' '
-              && i + 1 < originalSourceCode.length()
-              && originalSourceCode.charAt(i + 1) == '\n')) {
-        originalCount += 1;
-      } else {
-        break;
-      }
+    private Integer countBeginningNewlines(CharSequence originalSourceCode) {
+        Integer originalCount = 0;
+        for (Integer i = 0; i < originalSourceCode.length(); i++) {
+            // There's a terrible hack in GentsCodeGenerator that it sometimes adds " \n" instead of "\n".
+            // Count and strip that too.
+            if (originalSourceCode.charAt(i) == '\n' || (originalSourceCode.charAt(i) == ' ' && i + 1 < originalSourceCode.length()
+                            && originalSourceCode.charAt(i + 1) == '\n')) {
+                originalCount += 1;
+            } else {
+                break;
+            }
+        }
+        return originalCount;
     }
-    return originalCount;
-  }
 
-  /**
-   * Attempts to format the generated TypeScript using clang-format. On failure to format (i.e.
-   * clang-format does not exist), return the inputed string.
-   */
-  private static String tryClangFormat(String code) {
-    Process process = null;
-    try {
-      process = Runtime.getRuntime().exec(CLANG_FORMAT);
-      final OutputStream stdin = process.getOutputStream();
-      // stdout must be final for the nested object byteSource to return it.
-      final InputStream stdout = process.getInputStream();
-
-      // Write TypeScript code to stdin of the process
-      try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stdin, UTF_8)); ) {
-        writer.write(code);
-        writer.close();
-      }
-      return readStream(stdout);
-    } catch (IOException e) {
-      System.err.println("clang-format has failed to execute: " + e.getMessage());
-      return code;
-    } finally {
-      if (process != null) {
+    /**
+     * Attempts to format the generated TypeScript using clang-format. On failure to format (i.e.
+     * clang-format does not exist), return the inputed string.
+     */
+    private static String tryClangFormat(String code) {
+        Process process = null;
         try {
-          System.err.println(readStream(process.getErrorStream()));
-        } catch (
-            @SuppressWarnings("unused")
-            IOException ignored) {
-          // Ignored.
+            process = Runtime.getRuntime().exec(CLANG_FORMAT);
+            final OutputStream stdin = process.getOutputStream();
+            // stdout must be final for the nested object byteSource to return it.
+            final InputStream stdout = process.getInputStream();
+
+            // Write TypeScript code to stdin of the process
+            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stdin, UTF_8))) {
+                writer.write(code);
+                writer.close();
+            }
+            return readStream(stdout);
+        } catch (IOException e) {
+            System.err.println("clang-format has failed to execute: " + e.getMessage());
+            return code;
+        } finally {
+            if (process != null) {
+                try {
+                    System.err.println(readStream(process.getErrorStream()));
+                } catch (@SuppressWarnings("unused") IOException ignored) {
+                    // Ignored.
+                }
+                // TODO(renez): Use .waitFor(n, TimeUnit.SECONDS) and .destroyForcibly() once we moved to
+                // Java 8.
+                process.destroy();
+            }
         }
-        // TODO(renez): Use .waitFor(n, TimeUnit.SECONDS) and .destroyForcibly() once we moved to
-        // Java 8.
-        process.destroy();
-      }
     }
-  }
 
-  private static String readStream(final InputStream stream) throws IOException {
-    ByteSource byteSource =
-        new ByteSource() {
-          @Override
-          public InputStream openStream() throws IOException {
-            return stream;
-          }
+    private static String readStream(final InputStream stream) throws IOException {
+        ByteSource byteSource = new ByteSource() {
+            @Override
+            public InputStream openStream() throws IOException {
+                return stream;
+            }
         };
-    return byteSource.asCharSource(UTF_8).read();
-  }
-
-  /** Removes the root nodes for all the library files from the source node. */
-  private static void stripNonCompiledNodes(Node n, Set<String> filesToCompile) {
-    for (Node child : n.children()) {
-      if (!filesToCompile.contains(child.getSourceFileName())) {
-        child.detach();
-      }
+        return byteSource.asCharSource(UTF_8).read();
     }
-  }
 
-  /** Returns a list of source files from a list of file names. */
-  private static List<SourceFile> getFiles(Collection<String> fileNames) {
-    List<SourceFile> files = new ArrayList<>(fileNames.size());
-    for (String fileName : fileNames) {
-      files.add(SourceFile.fromFile(fileName, UTF_8));
+    /** Removes the root nodes for all the library files from the source node. */
+    private static void stripNonCompiledNodes(Node n, Set<String> filesToCompile) {
+        for (Node child : n.children()) {
+            if (!filesToCompile.contains(child.getSourceFileName())) {
+                child.detach();
+            }
+        }
     }
-    return files;
-  }
 
-  static class GentsResult {
+    /** Returns a list of source files from a list of file names. */
+    private static List<SourceFile> getFiles(Collection<String> fileNames) {
+        List<SourceFile> files = new ArrayList<>(fileNames.size());
+        for (String fileName : fileNames) {
+            files.add(SourceFile.fromFile(fileName, UTF_8));
+        }
+        return files;
+    }
 
-    public Map<String, String> sourceFileMap = new LinkedHashMap<>();
-    public String moduleRewriteLog = "";
-  }
+    static class GentsResult {
+
+        public Map<String, String> sourceFileMap = new LinkedHashMap<>();
+        public String moduleRewriteLog = "";
+    }
 }

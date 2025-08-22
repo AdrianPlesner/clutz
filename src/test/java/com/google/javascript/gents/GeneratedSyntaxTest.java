@@ -1,15 +1,13 @@
 package com.google.javascript.gents;
 
-import static com.google.javascript.clutz.DeclarationGeneratorTest.D_TS;
-import static com.google.javascript.clutz.DeclarationGeneratorTest.TS_SOURCES;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.javascript.clutz.DeclarationSyntaxTest;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.util.List;
+
+import static com.google.javascript.clutz.DeclarationGeneratorTest.D_TS;
+import static com.google.javascript.clutz.DeclarationGeneratorTest.TS_SOURCES;
+import com.google.common.collect.*;
+import com.google.javascript.clutz.DeclarationSyntaxTest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -20,52 +18,46 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class GeneratedSyntaxTest {
-  /*
-   * Ideally we want to generate both idiomatic and valid TypeScript code. But in some cases we
-   * choose to emit idiomatic TS and sacrifice the correctness.
-   */
-  private static final ImmutableSet<String> EXCLUDED_TS =
-      ImmutableSet.of("classes.ts", "module_namespace.ts", "static_methods.ts", "proto_methods.ts");
+    /*
+     * Ideally we want to generate both idiomatic and valid TypeScript code. But in some cases we
+     * choose to emit idiomatic TS and sacrifice the correctness.
+     */
+    private static final ImmutableSet<String> EXCLUDED_TS = ImmutableSet.of("classes.ts", "module_namespace.ts", "static_methods.ts", "proto_methods.ts");
 
-  private static final FilenameFilter COMPILABLE_TS_SOURCES =
-      (File dir, String name) ->
-          TS_SOURCES.accept(dir, name) && !D_TS.accept(dir, name) && !EXCLUDED_TS.contains(name);
+    private static final FilenameFilter COMPILABLE_TS_SOURCES = (File dir, String name) -> TS_SOURCES.accept(dir, name) && !D_TS.accept(dir, name)
+                    && !EXCLUDED_TS.contains(name);
 
-  private static final ImmutableList<String> TSC_FLAGS =
-      ImmutableList.of(
-          "--noEmit", "--skipDefaultLibCheck", "--lib", "es2024, esnext", "--strictNullChecks");
+    private static final ImmutableList<String> TSC_FLAGS = ImmutableList.of("--noEmit", "--skipDefaultLibCheck", "--lib", "es2024, esnext",
+                                                                            "--strictNullChecks");
 
-  // TODO(bowenni): Supports multiFileTests. Currently only compiles singleTests.
-  @Test
-  public void testGenerated() throws Exception {
-    List<File> tsInputs =
-        TypeScriptGeneratorTest.getTestInputFiles(
-            COMPILABLE_TS_SOURCES, TypeScriptGeneratorTest.singleTestPath);
-    List<File> dtsInputs =
-        TypeScriptGeneratorTest.getTestInputFiles(D_TS, TypeScriptGeneratorTest.singleTestPath);
-    List<String> tscCommand;
+    // TODO(bowenni): Supports multiFileTests. Currently only compiles singleTests.
+    @Test
+    public void testGenerated() throws Exception {
+        List<File> tsInputs = TypeScriptGeneratorTest.getTestInputFiles(COMPILABLE_TS_SOURCES, TypeScriptGeneratorTest.singleTestPath);
+        List<File> dtsInputs = TypeScriptGeneratorTest.getTestInputFiles(D_TS, TypeScriptGeneratorTest.singleTestPath);
+        List<String> tscCommand;
 
-    for (File tsInput : tsInputs) {
-      tscCommand = Lists.newArrayList(DeclarationSyntaxTest.TSC.toString(), "-m", "commonjs");
-      tscCommand.addAll(TSC_FLAGS);
-      tscCommand.add(tsInput.getPath());
-      // Optional declarations to support some types needed for compilation.
-      File dtsInput = getHelperDTS(tsInput, dtsInputs);
-      if (dtsInput != null) {
-        tscCommand.add(dtsInput.getPath());
-      }
-      DeclarationSyntaxTest.runChecked(tscCommand);
+        for (File tsInput : tsInputs) {
+            tscCommand = Lists.newArrayList(DeclarationSyntaxTest.TSC.toString(), "-m", "commonjs");
+            tscCommand.addAll(TSC_FLAGS);
+            tscCommand.add(tsInput.getPath());
+            // Optional declarations to support some types needed for compilation.
+            File dtsInput = getHelperDTS(tsInput, dtsInputs);
+            if (dtsInput != null) {
+                tscCommand.add(dtsInput.getPath());
+            }
+            DeclarationSyntaxTest.runChecked(tscCommand);
+        }
     }
-  }
 
-  private static File getHelperDTS(File tsInput, List<File> dtsInputs) {
-    String filename = tsInput.getName();
-    for (File dtsInput : dtsInputs) {
-      String dtsFilename = filename.substring(0, filename.lastIndexOf('.')) + ".d.ts";
-      if (dtsInput.getName().equals(dtsFilename)) {
-        return dtsInput;
-      }
+    private static File getHelperDTS(File tsInput, List<File> dtsInputs) {
+        String filename = tsInput.getName();
+        for (File dtsInput : dtsInputs) {
+            String dtsFilename = filename.substring(0, filename.lastIndexOf('.')) + ".d.ts";
+            if (dtsInput.getName().equals(dtsFilename)) {
+                return dtsInput;
+            }
+        }
+        return null;
     }
-    return null;
-  }
 }

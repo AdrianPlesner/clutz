@@ -6,50 +6,50 @@ import java.nio.file.Paths;
 
 /** Utility methods for file path resolution. */
 public class PathUtil {
-  private final String rootpath;
-  private final String absolutePrefix;
+    private final String rootpath;
+    private final String absolutePrefix;
 
-  PathUtil(String root, String absolutePrefix) {
-    this.rootpath = root;
-    this.absolutePrefix = absolutePrefix;
-  }
-
-  /**
-   * Returns the file name without its file extension or path. The result does not include the
-   * '{@code .}'.
-   */
-  String getFilePathWithoutExtension(String filepath) {
-    return removeExtension(new File(filepath).getPath());
-  }
-
-  /** Returns the file name without its file extension. */
-  String removeExtension(String filename) {
-    int dotIndex = filename.lastIndexOf(".");
-    return (dotIndex == -1) ? filename : filename.substring(0, dotIndex);
-  }
-
-  /**
-   * Returns the proper import path for a referenced file. Defaults to an absolute path if the
-   * referenced file is more than 2 directories above the current source file.
-   *
-   * <p>NOTE: the string returned from this is not really a root-based path on disk. It only makes
-   * sense as an input to a 'from '...'' clause.
-   */
-  String getImportPath(String sourceFile, String referencedFile) {
-    referencedFile = removeExtension(referencedFile);
-    String relativePath = getRelativePath(sourceFile + "/..", referencedFile);
-    if (relativePath.startsWith("../..")) {
-      return absolutePrefix + "/" + getRelativePath(rootpath, referencedFile);
-    } else {
-      return relativePath.startsWith(".") ? relativePath : "./" + relativePath;
+    PathUtil(String root, String absolutePrefix) {
+        this.rootpath = root;
+        this.absolutePrefix = absolutePrefix;
     }
-  }
 
-  /** Returns the relative path between the source file and the referenced module file. */
-  String getRelativePath(String from, String to) {
-    Path fromPath = Paths.get(from).toAbsolutePath().normalize();
-    Path toPath = Paths.get(to).toAbsolutePath().normalize();
-    Path importPath = fromPath.relativize(toPath).normalize();
-    return importPath.toString();
-  }
+    /**
+     * Returns the file name without its file extension or path. The result does not include the
+     * '{@code .}'.
+     */
+    String getFilePathWithoutExtension(String filepath) {
+        return removeExtension(new File(filepath).getPath());
+    }
+
+    /** Returns the file name without its file extension. */
+    String removeExtension(String filename) {
+        int dotIndex = filename.lastIndexOf(".");
+        return (dotIndex == -1) ? filename : filename.substring(0, dotIndex);
+    }
+
+    /**
+     * Returns the proper import path for a referenced file. Defaults to an absolute path if the
+     * referenced file is more than 2 directories above the current source file.
+     *
+     * <p>NOTE: the string returned from this is not really a root-based path on disk. It only makes
+     * sense as an input to a 'from '...'' clause.
+     */
+    String getImportPath(String sourceFile, String referencedFile) {
+        referencedFile = removeExtension(referencedFile);
+        String relativePath = getRelativePath(sourceFile + "/..", referencedFile);
+        if (relativePath.startsWith("../..")) {
+            return this.absolutePrefix + "/" + getRelativePath(this.rootpath, referencedFile);
+        } else {
+            return relativePath.startsWith(".") ? relativePath : "./" + relativePath;
+        }
+    }
+
+    /** Returns the relative path between the source file and the referenced module file. */
+    String getRelativePath(String from, String to) {
+        Path fromPath = Paths.get(from).toAbsolutePath().normalize();
+        Path toPath = Paths.get(to).toAbsolutePath().normalize();
+        Path importPath = fromPath.relativize(toPath).normalize();
+        return importPath.toString();
+    }
 }

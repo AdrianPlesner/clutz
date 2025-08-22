@@ -1,10 +1,9 @@
 package com.google.javascript.clutz;
 
-import com.google.javascript.rhino.Node;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
+
+import com.google.javascript.rhino.Node;
 
 /**
  * When a goog.module imports a symbol, there's an ambiguity about whether the symbol is from a
@@ -16,71 +15,63 @@ import java.util.Set;
  */
 public class LegacyNamespaceReexportMapBuilder extends ImportBasedMapBuilder {
 
-  @Override
-  protected Map<String, String> build(
-      String localModuleId, Node moduleBody, Set<String> googProvides) {
-    Map<String, String> reexportMap = new LinkedHashMap<>();
-    if (localModuleId == null) {
-      return reexportMap;
-    }
-
-    if (!isLegacyNamespaceModule(moduleBody)) {
-      return reexportMap;
-    }
-
-    for (Node statement : moduleBody.children()) {
-      if (isWholeModuleExportAssignment(statement)) {
-        // `exports = foo`
-        String localVariableName = getExportsAssignmentRHS(statement);
-
-        reexportMap.put(
-            buildWholeModuleExportSymbolName(localModuleId),
-            buildLocalSymbolName(localModuleId, localVariableName));
-      } else if (isNamedExportAssignment(statement)) {
-        // `exports.foo = foo`
-        String localVariableName = getExportsAssignmentRHS(statement);
-        String exportName = getNamedExportName(statement);
-
-        reexportMap.put(
-            buildNamedExportSymbolName(localModuleId, exportName),
-            buildLocalSymbolName(localModuleId, localVariableName));
-      } else if (isObjectLiteralExport(statement)) {
-        // `exports = {foo, bar}`
-        for (Entry<String, String> e :
-            objectLiteralASTToStringMap(statement.getFirstChild().getChildAtIndex(1)).entrySet()) {
-          String localVariableName = e.getValue();
-          String exportName = e.getKey();
-
-          reexportMap.put(
-              buildNamedExportSymbolName(localModuleId, exportName),
-              buildLocalSymbolName(localModuleId, localVariableName));
+    @Override
+    protected Map<String, String> build(String localModuleId, Node moduleBody, Set<String> googProvides) {
+        Map<String, String> reexportMap = new LinkedHashMap<>();
+        if (localModuleId == null) {
+            return reexportMap;
         }
-      }
+
+        if (!isLegacyNamespaceModule(moduleBody)) {
+            return reexportMap;
+        }
+
+        for (Node statement : moduleBody.children()) {
+            if (isWholeModuleExportAssignment(statement)) {
+                // `exports = foo`
+                String localVariableName = getExportsAssignmentRHS(statement);
+
+                reexportMap.put(buildWholeModuleExportSymbolName(localModuleId), buildLocalSymbolName(localModuleId, localVariableName));
+            } else if (isNamedExportAssignment(statement)) {
+                // `exports.foo = foo`
+                String localVariableName = getExportsAssignmentRHS(statement);
+                String exportName = getNamedExportName(statement);
+
+                reexportMap.put(buildNamedExportSymbolName(localModuleId, exportName), buildLocalSymbolName(localModuleId, localVariableName));
+            } else if (isObjectLiteralExport(statement)) {
+                // `exports = {foo, bar}`
+                for (Entry<String, String> e : objectLiteralASTToStringMap(statement.getFirstChild().getChildAtIndex(1)).entrySet()) {
+                    String localVariableName = e.getValue();
+                    String exportName = e.getKey();
+
+                    reexportMap.put(buildNamedExportSymbolName(localModuleId, exportName), buildLocalSymbolName(localModuleId, localVariableName));
+                }
+            }
+        }
+        return reexportMap;
     }
-    return reexportMap;
-  }
 
-  private boolean isLegacyNamespaceModule(Node moduleBody) {
-    for (Node statement : moduleBody.children()) {
-      if (isDeclareLegacyNamespaceStatement(statement)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Matches `goog.module.declareLegacyNamespace();` */
-  protected boolean isDeclareLegacyNamespaceStatement(Node statement) {
-    if (!statement.isExprResult()) {
-      return false;
+    private boolean isLegacyNamespaceModule(Node moduleBody) {
+        for (Node statement : moduleBody.children()) {
+            if (isDeclareLegacyNamespaceStatement(statement)) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    if (!statement.getFirstChild().isCall()) {
-      return false;
+    /** Matches `goog.module.declareLegacyNamespace();` */
+    protected boolean isDeclareLegacyNamespaceStatement(Node statement) {
+        if (!statement.isExprResult()) {
+            return false;
+        }
+
+        if (!statement.getFirstChild().isCall()) {
+            return false;
+        }
+
+        Node callBody = statement.getFirstFirstChild();
+
+        return callBody.matchesQualifiedName("goog.module.declareLegacyNamespace");
     }
-
-    Node callBody = statement.getFirstFirstChild();
-
-    return callBody.matchesQualifiedName("goog.module.declareLegacyNamespace");
-  }
 }
